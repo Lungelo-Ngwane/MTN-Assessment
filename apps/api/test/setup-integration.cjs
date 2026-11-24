@@ -1,3 +1,5 @@
+require('./setup-auth.cjs');
+
 const isolatedUrl =
   'postgresql://phase2_test:phase2_test@db-test:5432/contract_repayment_test';
 

@@ -1,13 +1,22 @@
+import { createHash } from 'node:crypto';
 import { validateEnvironment } from './environment';
 
 const DATABASE_URL = 'postgresql://example@localhost:5432/example';
+const JWT_SECRET = createHash('sha256')
+  .update('unit fixture')
+  .digest('base64url');
+const required = { DATABASE_URL, JWT_SECRET };
 
 describe('validateEnvironment', () => {
   it('provides local defaults', () => {
-    expect(validateEnvironment({ DATABASE_URL })).toEqual({
+    expect(validateEnvironment(required)).toMatchObject({
       NODE_ENV: 'development',
       PORT: 3000,
       DATABASE_URL,
+      JWT_TTL_SECONDS: 900,
+      AUTH_RATE_LIMIT: 10,
+      AUTH_RATE_WINDOW_SECONDS: 60,
+      CORS_ORIGINS: [],
     });
   });
 
@@ -17,8 +26,9 @@ describe('validateEnvironment', () => {
         NODE_ENV: 'production',
         PORT: '8080',
         DATABASE_URL,
+        JWT_SECRET,
       }),
-    ).toEqual({
+    ).toMatchObject({
       NODE_ENV: 'production',
       PORT: 8080,
       DATABASE_URL,
@@ -49,5 +59,40 @@ describe('validateEnvironment', () => {
     expect(() => validateEnvironment({ DATABASE_URL: databaseUrl })).toThrow(
       'DATABASE_URL must be a PostgreSQL URL',
     );
+  });
+
+  it.each([undefined, '', 'short', 'x'.repeat(43)])(
+    'rejects invalid JWT secrets (%p)',
+    (secret) => {
+      expect(() =>
+        validateEnvironment({ DATABASE_URL, JWT_SECRET: secret }),
+      ).toThrow('JWT_SECRET');
+    },
+  );
+
+  it.each([
+    ['JWT_TTL_SECONDS', '3601'],
+    ['AUTH_RATE_LIMIT', '0'],
+    ['AUTH_RATE_WINDOW_SECONDS', '0.5'],
+    ['JWT_AUDIENCE', ''],
+    ['CORS_ORIGINS', '*'],
+    ['CORS_ORIGINS', 'https://example.test/path'],
+  ])('rejects invalid %s settings', (key, value) => {
+    expect(() => validateEnvironment({ ...required, [key]: value })).toThrow(
+      key,
+    );
+  });
+
+  it('parses an explicit origin allowlist and expiration', () => {
+    const result = validateEnvironment({
+      ...required,
+      JWT_TTL_SECONDS: '120',
+      CORS_ORIGINS: 'https://example.test, http://localhost:3000',
+    });
+    expect(result.JWT_TTL_SECONDS).toBe(120);
+    expect(result.CORS_ORIGINS).toEqual([
+      'https://example.test',
+      'http://localhost:3000',
+    ]);
   });
 });
