@@ -1,0 +1,6 @@
+**/dist/
+**/coverage/
+.npm-cache/
+package-lock.json
+.env
+.env.*
