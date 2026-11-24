@@ -1,6 +1,7 @@
 export interface Environment {
   NODE_ENV: 'development' | 'test' | 'production';
   PORT: number;
+  DATABASE_URL: string;
 }
 
 export function validateEnvironment(
@@ -20,5 +21,21 @@ export function validateEnvironment(
     throw new Error('PORT must be an integer from 1 to 65535');
   }
 
-  return { NODE_ENV: mode, PORT: port };
+  const databaseUrl = input.DATABASE_URL;
+  const parsed =
+    typeof databaseUrl === 'string' ? URL.parse(databaseUrl) : null;
+  if (
+    typeof databaseUrl !== 'string' ||
+    !parsed ||
+    !['postgres:', 'postgresql:'].includes(parsed.protocol) ||
+    !parsed.hostname ||
+    !parsed.username ||
+    parsed.pathname.length < 2
+  ) {
+    throw new Error(
+      'DATABASE_URL must be a PostgreSQL URL with a user, host, and database',
+    );
+  }
+
+  return { NODE_ENV: mode, PORT: port, DATABASE_URL: databaseUrl };
 }

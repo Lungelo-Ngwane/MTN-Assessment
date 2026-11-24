@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { resolve } from 'node:path';
 import { validateEnvironment } from './config/environment';
+import { ContractsModule } from './contracts/contracts.module';
 import { HealthModule } from './health/health.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -12,6 +14,8 @@ import { HealthModule } from './health/health.module';
       validate: validateEnvironment,
     }),
     HealthModule,
+    UsersModule,
+    ContractsModule,
   ],
 })
 export class AppModule {}

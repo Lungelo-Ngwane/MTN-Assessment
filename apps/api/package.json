@@ -3,19 +3,30 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "npm run prisma:generate",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
+    "prebuild": "npm run prisma:generate",
     "build": "nest build",
     "typecheck": "tsc --noEmit",
-    "test:unit": "jest --selectProjects unit --runInBand",
-    "test:e2e": "jest --selectProjects e2e --runInBand",
-    "test:cov": "jest --coverage --runInBand"
+    "test:unit": "npm run test:jest -- --selectProjects unit",
+    "test:e2e": "npm run test:jest -- --selectProjects e2e",
+    "test:cov": "npm run test:jest -- --coverage",
+    "test:integration:run": "npm run test:jest -- --config jest.integration.config.cjs",
+    "test:jest": "node --experimental-vm-modules -e \"require('jest').run(process.argv.slice(1))\" -- --runInBand",
+    "prisma:generate": "prisma generate",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:status": "prisma migrate status"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.0",
     "@nestjs/platform-express": "^11.1.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "pg": "8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
@@ -26,6 +37,7 @@
     "@types/node": "^24.0.0",
     "@types/supertest": "^6.0.3",
     "jest": "^30.0.0",
+    "prisma": "7.10.1",
     "supertest": "^7.1.4",
     "ts-jest": "^29.4.5"
   }
