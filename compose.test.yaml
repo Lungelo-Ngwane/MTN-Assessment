@@ -1,0 +1,41 @@
+services:
+  db-test:
+    image: postgres:17.12-bookworm
+    environment:
+      POSTGRES_USER: phase2_test
+      POSTGRES_PASSWORD: phase2_test
+      POSTGRES_DB: contract_repayment_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'pg_isready',
+          '-h',
+          '127.0.0.1',
+          '-U',
+          'phase2_test',
+          '-d',
+          'contract_repayment_test',
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  test:
+    build:
+      context: .
+      target: build
+    depends_on:
+      db-test:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://phase2_test:phase2_test@db-test:5432/contract_repayment_test
+      NODE_ENV: test
+    command:
+      [
+        'sh',
+        '-ec',
+        'npm run db:migrate:deploy && npm run test:integration:run --workspace apps/api',
+      ]

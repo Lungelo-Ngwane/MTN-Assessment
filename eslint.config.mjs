@@ -4,7 +4,14 @@ import prettier from 'eslint-config-prettier';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  { ignores: ['**/dist/**', '**/coverage/**', '.npm-cache/**'] },
+  {
+    ignores: [
+      '**/dist/**',
+      '**/coverage/**',
+      '.npm-cache/**',
+      'apps/api/src/generated/**',
+    ],
+  },
   {
     files: ['**/*.ts'],
     extends: [

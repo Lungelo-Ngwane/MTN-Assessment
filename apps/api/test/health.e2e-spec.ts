@@ -28,6 +28,15 @@ describe('Health endpoint', () => {
       .expect(200, { status: 'ok' });
   });
 
+  it('returns HTTP 503 for readiness while liveness remains available', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/health/ready')
+      .expect(503, { status: 'unavailable' });
+    await request(app.getHttpServer())
+      .get('/api/v1/health')
+      .expect(200, { status: 'ok' });
+  });
+
   it.each(['/health', '/v1/health', '/api/health', '/api/v2/health'])(
     'returns HTTP 404 for %s',
     async (path) => {
