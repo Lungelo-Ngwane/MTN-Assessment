@@ -114,6 +114,83 @@ invalidates all tokens signed with the old key. In-memory rate limits apply
 per instance and use the socket IP, so users behind a shared proxy may
 share a quota.
 
+## Calculate repayment options
+
+Send a bearer token from login and a JSON body containing only `deviceAmount`.
+The endpoint returns a quote for 12, 24 and 36 months in ascending order.
+It performs no database writes and creates no contract.
+
+```bash
+curl -i "$api/contracts/calculate" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"deviceAmount":"15000.00"}'
+```
+
+The input is a positive ZAR decimal **string** with one to twelve integer
+digits and zero to two decimal places. Examples include `"15000"`, `"15000.5"`
+and `"0.01"`. Use a period as the decimal separator. Signs, whitespace,
+thousands separators, leading zeroes on multi-digit integers, scientific
+notation and extra properties return HTTP 400. At the current rate and terms,
+the supported purchase range is **R0.01 to R906,319,135,069.39**. The 36-month
+total for one cent above that ceiling rounds to R1,000,000,000,000.00, which
+exceeds the database's `NUMERIC(14,2)` limit. Missing or invalid JWTs return
+HTTP 401.
+
+**Financial assumptions for this implementation.** The quote uses a nominal
+annual rate of 6.5%, monthly reducing-balance amortisation, and equal end-of-month
+instalments with a final cent adjustment. It assumes no deposit, fees,
+insurance or balloon payment.
+
+The exact monthly payment is `M = P × r × (1 + r)^n / ((1 + r)^n − 1)`,
+where `P` is principal, `r = 0.065 / 12` and `n` is the term in months.
+The engine retains 60 significant decimal digits. It rounds `M × n` and the
+regular payment half up to cents. The final payment is the rounded total
+minus the first `n − 1` payments. If rounding up those payments would make
+the final one negative, the regular payment uses the lower cent. This can
+produce zero regular payments for very small balances. Total interest is
+the rounded total minus principal. The quote provides a regular and a final
+payment amount for each term. It has no dated ledger or monthly breakdown
+of principal and interest.
+
+HTTP 200 for a R15,000 device:
+
+```json
+{
+  "currency": "ZAR",
+  "deviceAmount": "15000.00",
+  "annualInterestRate": "6.500000",
+  "calculationMethod": "reducing-balance-amortisation",
+  "options": [
+    {
+      "termMonths": 12,
+      "monthlyRepayment": "1294.45",
+      "finalRepayment": "1294.41",
+      "totalRepayment": "15533.36",
+      "totalInterest": "533.36"
+    },
+    {
+      "termMonths": 24,
+      "monthlyRepayment": "668.19",
+      "finalRepayment": "668.28",
+      "totalRepayment": "16036.65",
+      "totalInterest": "1036.65"
+    },
+    {
+      "termMonths": 36,
+      "monthlyRepayment": "459.74",
+      "finalRepayment": "459.56",
+      "totalRepayment": "16550.46",
+      "totalInterest": "1550.46"
+    }
+  ]
+}
+```
+
+The annual rate is in percentage points, as in the existing database schema.
+See the [strategy and rounding decisions](docs/architecture.md#repayment-calculation)
+for details on changing the engine.
+
 ## Prisma and migrations
 
 ```bash

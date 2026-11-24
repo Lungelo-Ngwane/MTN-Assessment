@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { validateEnvironment } from './config/environment';
 import { ContractsModule } from './contracts/contracts.module';
 import { HealthModule } from './health/health.module';
+import { RepaymentModule } from './repayment/repayment.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -18,6 +19,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     ContractsModule,
     AuthModule,
+    RepaymentModule,
   ],
 })
 export class AppModule {}
