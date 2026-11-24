@@ -1,8 +1,10 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
+import { Public } from '../auth/public.decorator';
 import { HealthService } from './health.service';
 import { ReadinessService } from './readiness.service';
 
 @Controller({ path: 'health', version: '1' })
+@Public()
 export class HealthController {
   constructor(
     private readonly healthService: HealthService,

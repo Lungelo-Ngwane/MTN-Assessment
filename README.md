@@ -12,6 +12,7 @@ repository root in Git Bash, run the following commands.
 ```bash
 npm ci
 cp .env.example .env
+node -e "const fs=require('node:fs'); const key=require('node:crypto').randomBytes(32).toString('base64url'); fs.writeFileSync('.env',fs.readFileSync('.env','utf8').replace(/^JWT_SECRET=$/m,'JWT_SECRET='+key))"
 docker compose -f compose.yaml -f compose.local.yaml up -d --wait db
 npm run db:migrate:deploy
 npm run dev
@@ -61,6 +62,58 @@ special characters in URL credentials and adjust the local URL if you change
 has been initialized, credential changes require updating the database role as
 well as the environment.
 
+The setup command fills the blank JWT placeholder without printing the secret.
+Preserve the current secret in an existing checkout unless you intend to
+invalidate all issued tokens.
+
+| Authentication setting                        | Purpose                                                                                                                                         |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JWT_SECRET`                                  | Required, 32 random bytes encoded as unpadded base64url.                                                                                        |
+| `JWT_ISSUER`, `JWT_AUDIENCE`                  | Default to `contract-repayment-api` and `contract-repayment`.                                                                                   |
+| `JWT_TTL_SECONDS`                             | Default 900, accepted range 1–3600 seconds.                                                                                                     |
+| `AUTH_RATE_LIMIT`, `AUTH_RATE_WINDOW_SECONDS` | Per route and socket IP. Default 10 requests per 60 seconds.                                                                                    |
+| `CORS_ORIGINS`                                | Comma-separated exact HTTP(S) origins, for example `http://localhost:5173,https://app.example.com`. Blank disables browser cross-origin access. |
+
+## Register, log in, and fetch a profile
+
+Emails are trimmed and lowercased on both credential routes. Registration
+accepts passwords of 12–128 characters, including spaces, Unicode and
+punctuation. Passwords are verified exactly as supplied.
+
+```bash
+api=http://localhost:3000/api/v1
+curl -i "$api/auth/register" -H 'Content-Type: application/json' \
+  -d '{"email":"  Person@Example.com  ","password":"Example passphrase! 123"}'
+curl -i "$api/auth/login" -H 'Content-Type: application/json' \
+  -d '{"email":"person@example.com","password":"Example passphrase! 123"}'
+curl -i "$api/auth/me" -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+Set `ACCESS_TOKEN` to the value returned by login. Register responds with HTTP
+201 and `me` responds with HTTP 200. Both return this profile shape.
+
+```json
+{
+  "id": "e57cb305-a042-4ee5-b58f-24c2bbe5bf6e",
+  "email": "person@example.com",
+  "createdAt": "2026-11-24T12:00:00.000Z",
+  "updatedAt": "2026-11-24T12:00:00.000Z"
+}
+```
+
+Login returns HTTP 200 with
+`{"accessToken":"<JWT>","tokenType":"Bearer","expiresIn":900}`.
+Invalid credentials return HTTP 401 with `Invalid email or password`.
+Duplicate registration returns HTTP 409, which reveals that an address is
+registered. Invalid payloads return HTTP 400, oversized bodies return
+HTTP 413, and rate-limited requests return HTTP 429.
+
+Use TLS outside local development and inject keys at runtime from a secret
+manager. Short-lived tokens have no per-token revocation. Rotating the key
+invalidates all tokens signed with the old key. In-memory rate limits apply
+per instance and use the socket IP, so users behind a shared proxy may
+share a quota.
+
 ## Prisma and migrations
 
 ```bash
@@ -76,6 +129,10 @@ development database. That workflow checks for drift and uses a shadow database,
 which requires the ability to create databases with this local setup. Review
 the generated SQL before sharing it. If drift detection offers to reset an
 existing database, stop and investigate the drift.
+
+The Phase 3 migration canonicalizes existing emails in one transaction.
+Resolve any normalized duplicates before deploying. A collision rolls back
+the migration.
 
 Build and watch mode generate the client automatically. After a fresh
 `npm ci`, run `npm run prisma:generate` before standalone TypeScript, lint,

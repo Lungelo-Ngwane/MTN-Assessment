@@ -4,18 +4,69 @@
 
 The private npm workspace owns the lockfile and quality commands. `apps/api`
 owns the NestJS API, database schema, migrations, and application tests.
-`AppModule` composes configuration and the health, users, and contracts modules.
+`AppModule` composes configuration and the authentication, health, users, and contracts modules.
 Health controllers own routing and status codes. Feature repositories own
 persistence operations and receive the shared Prisma service through Nest
 dependency injection. Each repository exposes the operations demonstrated by
 its feature. Callers use TypeScript records and fixed-scale decimal strings
 without depending on Prisma input types or `Decimal` objects.
 
-User creation accepts a password hash from its caller. User queries and create
-results select only the profile fields at the database boundary. Credential
-verification will need a dedicated internal operation when authentication is
-introduced. The database currently enforces case-sensitive email uniqueness.
-Email normalization depends on the future authentication policy.
+User creation accepts a password hash. Profile lookups and create results
+select only profile fields. The internal login lookup selects only a user ID
+and password hash. Both credential routes trim and lowercase the email.
+The migration canonicalizes existing addresses and the unique index handles
+concurrent registrations. A conflicting legacy pair stops the migration for
+manual resolution. Review existing internationalized addresses before
+migration because PostgreSQL case folding follows the database locale.
+
+## Authentication flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as Auth controller and service
+    participant DB as User repository and PostgreSQL
+    Client->>API: Register with email and password
+    API->>API: Normalize email and hash password
+    API->>DB: Insert user with hash
+    DB-->>API: Safe profile or unique constraint error
+    API-->>Client: 201 profile or 409 conflict
+    Client->>API: Login with email and password
+    API->>DB: Read user ID and hash
+    API->>API: Verify Argon2id and sign access token
+    API-->>Client: 200 token or generic 401
+    Client->>API: Request /me with Bearer token
+    API->>API: Verify JWT and extract UUID subject
+    API->>DB: Read current profile by UUID
+    API-->>Client: 200 profile or 401
+```
+
+The global Passport guard protects routes by default. Use `@Public()` for
+intentional anonymous routes. Liveness, readiness, registration and login
+are public. Protected handlers can use `@CurrentUser()` for the typed UUID
+principal. Passport verifies the HS256 signature, expiration, issuer and
+audience. The strategy also requires an expiration claim and UUID subject.
+Tokens contain subject, issuer, audience, issuance and expiration only.
+The profile route checks account existence. Future protected endpoints
+must decide whether their operation requires a current-account check.
+
+Argon2id uses 19 MiB, two passes, one lane and a random salt from the library.
+Login verifies a precomputed dummy hash for unknown accounts, so both failed
+credential paths perform password verification. Database and runtime
+variation can still affect timing. HTTP 409 on duplicate registration
+allows account enumeration. Both credential failure paths return the
+same generic HTTP 401 response.
+
+Helmet, a 16 KiB body limit and the global DTO pipe apply to HTTP requests.
+The pipe rejects unexpected properties and avoids implicit conversion.
+Authentication errors are sanitized before reaching logs or clients.
+The browser origin allowlist is explicit and cookie credentials are disabled.
+Rate limiting counts registration and login separately by socket IP in
+memory per instance. Forwarded headers are ignored. Users behind a shared
+proxy can share a quota. Coordinate rate limiting at trusted ingress before
+scaling horizontally. Deploy with TLS and runtime-managed random keys.
+Stateless access tokens have no per-token revocation and expire after their
+configured lifetime. Rotating the key invalidates all earlier tokens.
 
 ## Data model
 

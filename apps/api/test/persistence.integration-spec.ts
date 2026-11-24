@@ -7,7 +7,10 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { ContractRepository } from '../src/contracts/contract.repository';
 import { PrismaService } from '../src/database/prisma.service';
-import { UserRepository } from '../src/users/user.repository';
+import {
+  DuplicateEmailError,
+  UserRepository,
+} from '../src/users/user.repository';
 
 const snapshot = {
   deviceAmount: '123456789012.34',
@@ -57,7 +60,9 @@ describe('PostgreSQL persistence', () => {
     expect(saved).not.toHaveProperty('passwordHash');
     await expect(users.findByEmail(data.email)).resolves.toEqual(saved);
     await expect(users.findByEmail('absent@example.test')).resolves.toBeNull();
-    await expect(users.create(data)).rejects.toMatchObject({ code: 'P2002' });
+    await expect(users.create(data)).rejects.toBeInstanceOf(
+      DuplicateEmailError,
+    );
     await expect(
       prisma.client.user.findUnique({ where: { id: saved.id } }),
     ).resolves.toMatchObject(data);
