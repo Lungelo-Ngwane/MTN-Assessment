@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import type { Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
@@ -41,6 +42,27 @@ describe('PostgreSQL persistence', () => {
 
   afterAll(async () => {
     await app?.close();
+  });
+
+  it('quotes repayments without writing users or contracts', async () => {
+    const before = await prisma.client.$transaction([
+      prisma.client.user.count(),
+      prisma.client.contract.count(),
+    ]);
+    const token = await app
+      .get(JwtService)
+      .signAsync({ sub: randomUUID() }, { expiresIn: 900 });
+    await request(app.getHttpServer())
+      .post('/api/v1/contracts/calculate')
+      .auth(token, { type: 'bearer' })
+      .send({ deviceAmount: '15000.00' })
+      .expect(200);
+    await expect(
+      prisma.client.$transaction([
+        prisma.client.user.count(),
+        prisma.client.contract.count(),
+      ]),
+    ).resolves.toEqual(before);
   });
 
   it('reports readiness against the migrated database', async () => {

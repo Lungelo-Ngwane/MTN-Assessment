@@ -107,7 +107,52 @@ finite nonnegative numeric values. Calculated fields are stored as snapshots
 provided by callers. The repository performs no calculation. PostgreSQL
 rounds values that exceed the declared scale during insertion, so the future
 calculation service should supply values at the chosen business precision.
-These storage constraints establish no formula or supported term list.
+The calculation feature applies fixed terms and rounding before returning
+quotes. The schema remains independent of the calculation policy.
+
+## Repayment calculation
+
+`RepaymentModule` owns the authenticated `POST /api/v1/contracts/calculate`
+route. The controller validates the request through the global DTO pipe and
+maps unsupported amounts to HTTP 400. The service fixes the annual rate to
+6.500000 percentage points and requests 12, 24 and 36 months in order.
+The existing JWT guard authenticates the request. The module has no
+persistence dependency, and neither the service nor the calculator reads
+or writes the database.
+
+**Implementation assumptions.** The proposed model uses a nominal 6.5%
+annual rate, monthly reducing-balance amortisation, equal end-of-month
+instalments with a final rounding adjustment, and no deposit, additional fees,
+insurance or balloon payment. The model uses `M = P × r × (1 + r)^n / ((1 + r)^n − 1)`
+with `r = annual percentage points / 1200`. The internal zero-rate case
+uses `P / n`. The API exposes a fixed rate and fixed terms.
+
+The strategy uses an isolated 60-significant-digit decimal.js context with
+half-up rounding. The quote rounds the exact payment multiplied by the term
+to determine the total. It rounds the regular payment to cents and derives
+the final payment as the remainder. For tiny balances where half-up regular
+payments would overpay the total before the final month, it uses the lower
+cent for the regular payment. The final instalment stays nonnegative and
+the payments always sum to the quoted total. Interest equals total minus
+principal. Money is serialized with two decimal places. The principal and
+all quoted monetary values fit `NUMERIC(14,2)`.
+
+For R15,000 over 12 months, eleven payments of R1,294.45 plus a final
+R1,294.41 produce R15,533.36, including R533.36 interest. At the low end,
+a R0.18 quote over 36 months produces a R0.20 total collected in the
+final payment. This is a quote-level rounding convention. A future payment
+ledger may need a separate policy for rounding accrued interest each month
+and settling the resulting balance.
+
+The Nest provider token `REPAYMENT_CALCULATOR` binds a small strategy
+interface to the pure `AmortisedRepaymentCalculator`. This keeps
+the formula directly testable and lets a future policy replace the algorithm
+without moving interest or term selection into the controller. The interface
+and provider binding add one layer of indirection. To change the strategy,
+implement `RepaymentCalculator`, provide its method identifier, update the
+binding in `repayment.module.ts`, and validate the new strategy with independent
+reference values and the storage bounds. Review the API compatibility and
+update the examples if the policy changes an existing quote.
 
 ## Prisma, environment, and deployment
 
