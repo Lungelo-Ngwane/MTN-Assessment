@@ -20,6 +20,7 @@ export interface Environment {
   AUTH_RATE_WINDOW_SECONDS: number;
   CORS_ORIGINS: string[];
   LOG_LEVEL: (typeof LOG_LEVELS)[number];
+  SWAGGER_ENABLED: boolean;
 }
 
 function positiveInteger(
@@ -119,6 +120,15 @@ export function validateEnvironment(
     );
   }
 
+  const swaggerEnabled = input.SWAGGER_ENABLED;
+  if (
+    swaggerEnabled !== undefined &&
+    swaggerEnabled !== 'true' &&
+    swaggerEnabled !== 'false'
+  ) {
+    throw new Error('SWAGGER_ENABLED must be true or false');
+  }
+
   return {
     NODE_ENV: mode,
     PORT: port,
@@ -154,5 +164,9 @@ export function validateEnvironment(
     ),
     CORS_ORIGINS: corsOrigins(input.CORS_ORIGINS),
     LOG_LEVEL: logLevel,
+    SWAGGER_ENABLED:
+      swaggerEnabled === undefined
+        ? mode === 'development'
+        : swaggerEnabled === 'true',
   };
 }

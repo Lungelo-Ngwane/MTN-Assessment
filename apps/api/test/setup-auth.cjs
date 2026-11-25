@@ -10,3 +10,4 @@ process.env.AUTH_RATE_LIMIT = '30';
 process.env.AUTH_RATE_WINDOW_SECONDS = '60';
 process.env.CORS_ORIGINS = 'https://client.example.test';
 process.env.LOG_LEVEL = 'silent';
+process.env.SWAGGER_ENABLED = 'false';

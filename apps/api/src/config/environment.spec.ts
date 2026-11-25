@@ -8,6 +8,22 @@ const JWT_SECRET = createHash('sha256')
 const required = { DATABASE_URL, JWT_SECRET };
 
 describe('validateEnvironment', () => {
+  it.each([
+    ['development', undefined, true],
+    ['production', undefined, false],
+    ['test', undefined, false],
+    ['development', 'false', false],
+    ['production', 'true', true],
+  ])(
+    'configures Swagger in %s with override %s',
+    (NODE_ENV, SWAGGER_ENABLED, enabled) => {
+      expect(
+        validateEnvironment({ ...required, NODE_ENV, SWAGGER_ENABLED })
+          .SWAGGER_ENABLED,
+      ).toBe(enabled);
+    },
+  );
+
   it('provides local defaults', () => {
     expect(validateEnvironment(required)).toMatchObject({
       NODE_ENV: 'development',
@@ -79,6 +95,7 @@ describe('validateEnvironment', () => {
     ['CORS_ORIGINS', '*'],
     ['CORS_ORIGINS', 'https://example.test/path'],
     ['LOG_LEVEL', 'verbose'],
+    ['SWAGGER_ENABLED', '1'],
   ])('rejects invalid %s settings', (key, value) => {
     expect(() => validateEnvironment({ ...required, [key]: value })).toThrow(
       key,

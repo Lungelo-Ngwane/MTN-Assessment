@@ -268,6 +268,28 @@ Validation responses omit raw values and field names. This is request
 correlation within the service. Cross-service tracing, metrics and a
 log aggregation or retention pipeline are outside this phase.
 
+## OpenAPI documentation
+
+`openapi/` configures Swagger UI at `/api/docs` and the JSON document at
+`/api/docs-json`. Nest scans route and DTO metadata from the existing
+controllers. Shared response components describe fixed-scale money,
+legacy snapshot nulls, pagination, health bodies and the standard error
+envelope. The error examples use the same code and message definitions
+as the global exception filter. A shared operation decorator attaches the
+`X-Request-ID` response header and declares bearer security or explicit
+public access. That declaration describes the route. The existing JWT
+guard and owner-filtered repository enforce access at runtime.
+
+`SWAGGER_ENABLED` accepts only `true` and `false`. Development enables the
+routes by default, and production and tests require opt-in. The example
+environment explicitly enables the local assessment demonstration. UI scripts,
+styles and the specification are served from the same origin with Helmet’s
+existing policy. The UI uses the local specification URL and keeps bearer
+credentials in memory. The JSON spec and UI are publicly accessible when
+enabled, so an internal production deployment should restrict them at
+the ingress and use TLS. See the README for the register, authorize,
+calculate and contract CRUD demonstration.
+
 ## Verification and trade-offs
 
 Unit tests exercise financial invariants, configuration and database error

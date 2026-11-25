@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 
-const errors = {
+export const ERROR_DEFINITIONS = {
   BAD_REQUEST: [400, 'Bad Request'],
   VALIDATION_FAILED: [400, 'Request validation failed'],
   MALFORMED_JSON: [400, 'Malformed JSON'],
@@ -23,7 +23,7 @@ const errors = {
   HTTP_ERROR: [400, 'Request failed'],
 } as const;
 
-export type ErrorCode = keyof typeof errors;
+export type ErrorCode = keyof typeof ERROR_DEFINITIONS;
 
 export interface ErrorResponse {
   statusCode: number;
@@ -55,7 +55,7 @@ export function writeError(
   code: ErrorCode,
   statusOverride?: number,
 ): void {
-  const [defaultStatus, message] = errors[code];
+  const [defaultStatus, message] = ERROR_DEFINITIONS[code];
   const statusCode = statusOverride ?? defaultStatus;
   const body: ErrorResponse = {
     statusCode,

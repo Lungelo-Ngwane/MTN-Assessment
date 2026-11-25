@@ -10,6 +10,7 @@ import {
   REQUEST_ID_HEADER,
 } from './http/request-logging';
 import { RequestValidationPipe } from './http/request-validation';
+import { configureOpenApi } from './openapi/configure-openapi';
 
 export function configureApp(app: INestApplication): void {
   const config = app.get(ConfigService<Environment, true>);
@@ -27,4 +28,5 @@ export function configureApp(app: INestApplication): void {
   app.useGlobalPipes(new RequestValidationPipe());
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI });
+  if (config.get('SWAGGER_ENABLED', { infer: true })) configureOpenApi(app);
 }
