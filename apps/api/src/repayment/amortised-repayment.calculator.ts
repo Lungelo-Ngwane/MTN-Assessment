@@ -13,6 +13,7 @@ const MAX_TERM = 2_147_483_647;
 
 export class AmortisedRepaymentCalculator implements RepaymentCalculator {
   readonly method = 'reducing-balance-amortisation';
+  readonly version = 1;
 
   calculate(
     amount: string,

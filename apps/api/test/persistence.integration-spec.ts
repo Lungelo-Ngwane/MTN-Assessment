@@ -6,7 +6,10 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
-import { ContractRepository } from '../src/contracts/contract.repository';
+import {
+  ContractOwnerUnavailableError,
+  ContractRepository,
+} from '../src/contracts/contract.repository';
 import { PrismaService } from '../src/database/prisma.service';
 import {
   DuplicateEmailError,
@@ -17,9 +20,12 @@ const snapshot = {
   deviceAmount: '123456789012.34',
   termMonths: 24,
   interestRate: '6.500001',
-  monthlyRepayment: '500.10',
-  totalRepayment: '12000.00',
+  monthlyRepayment: '5144032875.51',
+  finalRepayment: '5144032875.62',
+  totalRepayment: '123456789012.35',
   totalInterest: '0.01',
+  calculationMethod: 'test-fixture',
+  calculationVersion: 1,
 };
 
 describe('PostgreSQL persistence', () => {
@@ -100,10 +106,13 @@ describe('PostgreSQL persistence', () => {
       passwordHash: 'test-fixture-hash',
     });
     const data = { ...snapshot, userId: owner.id };
-    const saved = await contracts.create(data);
-    await contracts.create({ ...snapshot, userId: other.id });
+    const saved = await contracts.create(owner.id, snapshot);
+    await contracts.create(other.id, snapshot);
     expect(saved).toMatchObject(data);
-    await expect(contracts.findByUserId(owner.id)).resolves.toEqual([saved]);
+    await expect(contracts.list(owner.id, 1, 20)).resolves.toEqual({
+      items: [saved],
+      total: 1,
+    });
     await expect(
       prisma.client.user.delete({ where: { id: owner.id } }),
     ).rejects.toMatchObject({ code: 'P2003' });
@@ -111,8 +120,8 @@ describe('PostgreSQL persistence', () => {
 
   it('rejects a contract whose owner does not exist', async () => {
     await expect(
-      contracts.create({ ...snapshot, userId: randomUUID() }),
-    ).rejects.toMatchObject({ code: 'P2003' });
+      contracts.create(randomUUID(), snapshot),
+    ).rejects.toBeInstanceOf(ContractOwnerUnavailableError);
   });
 
   it('rejects a nonpositive term and negative monetary values at the database', async () => {
@@ -121,10 +130,10 @@ describe('PostgreSQL persistence', () => {
       passwordHash: 'test-fixture-hash',
     });
     await expect(
-      contracts.create({ ...snapshot, userId, termMonths: 0 }),
+      contracts.create(userId, { ...snapshot, termMonths: 0 }),
     ).rejects.toThrow('Contract_positive_term');
     await expect(
-      contracts.create({ ...snapshot, userId, monthlyRepayment: '-0.01' }),
+      contracts.create(userId, { ...snapshot, monthlyRepayment: '-0.01' }),
     ).rejects.toThrow('Contract_nonnegative_snapshot');
   });
 });

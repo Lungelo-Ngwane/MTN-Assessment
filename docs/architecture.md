@@ -87,8 +87,11 @@ erDiagram
         decimal interestRate
         integer termMonths
         decimal monthlyRepayment
+        decimal finalRepayment
         decimal totalRepayment
         decimal totalInterest
+        text calculationMethod
+        integer calculationVersion
         timestamptz createdAt
         timestamptz updatedAt
     }
@@ -97,8 +100,8 @@ erDiagram
 PostgreSQL generates UUID primary keys and provides timestamp defaults. Prisma
 maintains `updatedAt` for ORM updates. Every contract has one existing owner.
 The foreign key restricts deletion and ID changes for users with contracts,
-preserving contract history. An index on `Contract.userId` supports owner
-lookups.
+preserving contract ownership. An index on `Contract(userId, createdAt DESC,
+id DESC)` supports owner lookup and deterministic listing.
 
 Monetary values use `NUMERIC(14,2)`, with 12 integer digits and two
 fractional digits. Rates use `NUMERIC(9,6)` in percentage points. A 6.5%
@@ -153,6 +156,54 @@ implement `RepaymentCalculator`, provide its method identifier, update the
 binding in `repayment.module.ts`, and validate the new strategy with independent
 reference values and the storage bounds. Review the API compatibility and
 update the examples if the policy changes an existing quote.
+
+## Contract lifecycle and ownership
+
+`ContractsModule` imports the repayment service and adds a controller,
+service and repository. The controller reads the UUID principal from
+`@CurrentUser()`. The service passes that ID separately from validated
+financial inputs. Every list, count, detail, lock, update and delete query
+includes the owner predicate. Foreign and missing rows return the same
+HTTP 404. The repository maps explicit response fields and formats money
+to two decimals and rates to six decimals in percentage points.
+
+Creation and PATCH select an option from the existing comparison engine.
+This keeps the same technical purchase ceiling, R906,319,135,069.39, for all
+three terms. The ceiling is derived from the 36-month `NUMERIC(14,2)`
+total and represents storage capacity. The implementation adds no
+business price limit. Snapshots retain the method identifier and version
+of the calculation strategy. Version 1 identifies the Phase 4 policy.
+Increment the version when rounding or calculation behaviour changes.
+Existing snapshots keep their stored values until an explicit edit.
+
+PATCH locks the target row with an owner-scoped, parameterized
+`SELECT ... FOR UPDATE` inside a PostgreSQL read-committed transaction.
+The service merges supplied inputs with the locked row and computes one
+complete snapshot. Prisma writes it in the same transaction. Concurrent
+edits to different fields merge, while edits to the same field take effect
+in lock order. Calculation or database failures roll back the transaction.
+Creation time stays fixed and Prisma updates the modification timestamp.
+
+List and count share a repeatable-read snapshot. Offset pagination provides
+exact page counts and stable tie ordering. Rows can shift between separate
+page requests when contracts are inserted or deleted, and deep offsets
+can be expensive. Deletion uses a single owner-filtered hard delete. This
+keeps the assessment simple and removes the quote permanently. Production
+retention or audit requirements may call for soft deletion or a separate
+audit trail. The records represent editable quotes and do not serve as
+executed loan agreements or a payment ledger.
+
+### Migration compatibility
+
+The Phase 5 migration adds nullable metadata and final payment columns
+without backfilling unknown history. PostgreSQL `NOT VALID` checks enforce
+supported terms, positive principal, complete metadata and both repayment
+identities on inserts and updates, while preserving historical rows.
+Earlier finite, nonnegative checks remain enforced. Legacy fields can
+remain null until a successful PATCH replaces the entire snapshot. An
+incompatible legacy amount or term must be supplied in the patch.
+The index change and constraint installation run transactionally and may
+block writes during migration. Plan the index build for populated databases.
 
 ## Prisma, environment, and deployment
 
