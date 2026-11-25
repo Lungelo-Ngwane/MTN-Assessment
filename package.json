@@ -21,6 +21,8 @@
     "test:unit": "npm run test:unit --workspace apps/api",
     "test:e2e": "npm run test:e2e --workspace apps/api",
     "test:cov": "npm run test:cov --workspace apps/api",
+    "test:cov:all": "node scripts/test-integration.cjs --coverage",
+    "check": "npm run build && npm run typecheck && npm run lint && npm run format:check && npm run test:cov:all",
     "test:integration": "node scripts/test-integration.cjs",
     "prisma:generate": "npm run prisma:generate --workspace apps/api",
     "db:migrate:dev": "npm run db:migrate:dev --workspace apps/api --",

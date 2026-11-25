@@ -13,6 +13,7 @@
     "test:e2e": "npm run test:jest -- --selectProjects e2e",
     "test:cov": "npm run test:jest -- --coverage",
     "test:integration:run": "npm run test:jest -- --config jest.integration.config.cjs",
+    "test:cov:all:run": "npm run test:jest -- --config jest.combined.config.cjs --coverage --detectOpenHandles --randomize --showSeed",
     "test:jest": "node --experimental-vm-modules -e \"require('jest').run(process.argv.slice(1))\" -- --runInBand",
     "prisma:generate": "prisma generate",
     "db:migrate:dev": "prisma migrate dev",

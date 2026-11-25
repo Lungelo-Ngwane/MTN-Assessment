@@ -97,4 +97,13 @@ describe('validateEnvironment', () => {
       'http://localhost:3000',
     ]);
   });
+
+  it('rejects a non-string CORS origin configuration', () => {
+    expect(() =>
+      validateEnvironment({
+        ...required,
+        CORS_ORIGINS: ['https://example.test'],
+      }),
+    ).toThrow('CORS_ORIGINS must list HTTP(S) origins');
+  });
 });

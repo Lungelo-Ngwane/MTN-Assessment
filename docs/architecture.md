@@ -270,22 +270,37 @@ log aggregation or retention pipeline are outside this phase.
 
 ## Verification and trade-offs
 
-Unit and HTTP end-to-end tests contribute to the Jest coverage report. The
-report excludes generated code and the process entry point. Real PostgreSQL
-integration tests run on a uniquely named Compose network with an unpublished
-database and temporary storage. The suite applies the migration to an empty
-database and checks repository behavior, relational constraints, decimal
-round-tripping, and readiness. The ordinary end-to-end suite verifies the
-unavailable response with a loopback-only fixture connection. Jest enables
-Node VM module support so Prisma can dynamically load its query compiler
-inside the test runner.
+Unit tests exercise financial invariants, configuration and database error
+classification. HTTP tests use the real Nest pipeline for validation,
+authentication, sanitized errors and request correlation. They use a
+loopback-only PostgreSQL endpoint for unavailable-connection scenarios.
+Integration tests use real PostgreSQL for repository behavior, ownership,
+relational constraints and rollback. The concurrent PATCH test holds the
+target row and observes both database lock waiters before releasing it.
+Database tests close Nest applications, which disconnect their Prisma pools.
 
-The full npm audit reported 19 moderate development findings. For the Nest
-CLI chain through `glob` and `minimatch`, npm proposed Nest CLI 12.0.15. For
-the Jest runner and coverage chain through `babel-plugin-istanbul`,
-`test-exclude`, `glob`, and `minimatch`, npm proposed Jest 29.7.0. Both
-proposed versions cross a major-version boundary and require compatibility
-review. The Prisma CLI's Effect advisory was resolved with a targeted override
-to `effect` 3.22.5. Remove the override when Prisma depends on a patched
-release and the full audit confirms it. The production dependency audit
-reported zero findings.
+Each integration run uses a uniquely named Compose project and an empty
+PostgreSQL database on temporary storage, with no published port. The runner
+applies the committed migrations and cleans up the test stack. Jest enables
+Node VM module support for the Prisma query compiler. The combined coverage
+command instruments all three projects together in that container and mounts
+only the report output directory on the host. It reports the union of executed
+lines and branches. The host unit and HTTP report provides a separate
+like-for-like comparison. Both retain the existing scope, which excludes
+generated code, test files and the process entry point. Bootstrap requires a
+separate runtime smoke check.
+
+The combined quality gate uses thresholds of 90% statements, 85% branches,
+90% functions and 90% lines. It runs open-handle diagnostics without forcing
+Jest to exit and shuffles test order with a seed Jest prints for replay.
+The GitHub Actions workflow runs the root quality command and production audit.
+
+The Phase 7 audit reported zero production findings with optional
+dependencies included. The full audit still reported 19 moderate
+development findings across the Nest CLI and Jest tooling chains. The
+underlying advisories require `glob` 14.0.2 and `minimatch` 11.0.1 or
+later. The compatible npm audit preview proposed
+`babel-plugin-istanbul` 8.0.2 but left all 19 findings. npm's proposed
+Nest CLI 12.0.15 upgrade and Jest 29.7.0 downgrade cross major-version
+boundaries. Review those changes separately or wait for supported
+dependency updates. The existing Effect 3.22.5 override remains in place.
