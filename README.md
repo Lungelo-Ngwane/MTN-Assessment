@@ -74,6 +74,43 @@ invalidate all issued tokens.
 | `AUTH_RATE_LIMIT`, `AUTH_RATE_WINDOW_SECONDS` | Per route and socket IP. Default 10 requests per 60 seconds.                                                                                    |
 | `CORS_ORIGINS`                                | Comma-separated exact HTTP(S) origins, for example `http://localhost:5173,https://app.example.com`. Blank disables browser cross-origin access. |
 
+## Interactive API documentation
+
+Open `http://localhost:3000/api/docs` for Swagger UI and
+`http://localhost:3000/api/docs-json` for the OpenAPI JSON specification.
+Use your configured host port if it differs from 3000. The local
+`.env.example` enables both routes. `SWAGGER_ENABLED` accepts `true` or
+`false`. When unset, the local development process enables documentation
+and a production or test process disables it. Compose defaults to disabled
+when the variable is absent.
+
+### Demonstration workflow
+
+1. In **Authentication**, use **Try it out** on `POST /api/v1/auth/register`.
+   Send `{"email":"assessment@example.test","password":"Demo passphrase! 123"}`
+   or choose an unused example address. Expect **201**. If you already
+   registered the account, continue to login.
+2. Send the same credentials to `POST /api/v1/auth/login`. Expect **200**.
+   Copy the `accessToken` value, select **Authorize**, and enter the JWT
+   without a `Bearer` prefix. Use `GET /api/v1/auth/me` to verify your profile.
+3. In **Repayment**, send `{"deviceAmount":"15000.00"}` to
+   `POST /api/v1/contracts/calculate`. Expect **200** with 12-, 24- and
+   36-month estimates. The 12-month total is `"15533.36"`.
+4. In **Contracts**, send `{"deviceAmount":"15000.00","termMonths":12}` to
+   `POST /api/v1/contracts`. Expect **201** and copy the returned contract UUID.
+5. List contracts with `GET /api/v1/contracts`, then use the UUID with
+   `GET /api/v1/contracts/{id}`. Both return **200**.
+6. Patch the contract with `{"termMonths":24}`. Expect **200** and a total of
+   `"16036.65"`. Delete the demonstration contract and expect **204**.
+   Reading the deleted UUID returns **404**.
+7. **Health** operations are public. They can be used without the JWT.
+
+Swagger UI keeps authorization in memory. Reloading the page clears it.
+When documentation is explicitly enabled in production, both the UI and
+JSON specification are public to anyone who can reach those routes.
+Restrict both routes and the UI assets at the ingress if only an internal
+audience should have access. Use TLS for real credentials.
+
 ## Register, log in, and fetch a profile
 
 Emails are trimmed and lowercased on both credential routes. Registration
