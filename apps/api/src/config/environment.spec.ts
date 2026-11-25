@@ -17,6 +17,7 @@ describe('validateEnvironment', () => {
       AUTH_RATE_LIMIT: 10,
       AUTH_RATE_WINDOW_SECONDS: 60,
       CORS_ORIGINS: [],
+      LOG_LEVEL: 'info',
     });
   });
 
@@ -77,6 +78,7 @@ describe('validateEnvironment', () => {
     ['JWT_AUDIENCE', ''],
     ['CORS_ORIGINS', '*'],
     ['CORS_ORIGINS', 'https://example.test/path'],
+    ['LOG_LEVEL', 'verbose'],
   ])('rejects invalid %s settings', (key, value) => {
     expect(() => validateEnvironment({ ...required, [key]: value })).toThrow(
       key,

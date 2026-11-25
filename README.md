@@ -260,6 +260,85 @@ for `finalRepayment`, `calculationMethod` and `calculationVersion`. A successful
 PATCH generates a complete snapshot under the current policy. For a legacy
 record with unsupported inputs, provide replacements for those inputs.
 
+## API errors and request IDs
+
+Errors use the following JSON shape. Each request receives a new server-generated
+UUID in the `X-Request-ID` response header. Error bodies include the same ID and
+an ISO 8601 UTC timestamp. Clients should branch on `code` and use the ID when
+reporting an issue.
+
+```json
+{
+  "statusCode": 400,
+  "code": "VALIDATION_FAILED",
+  "message": "Request validation failed",
+  "requestId": "5eaaa702-477a-4f3a-93ad-864ff5bbb83d",
+  "timestamp": "2026-11-25T10:00:00.000Z"
+}
+```
+
+```json
+{
+  "statusCode": 401,
+  "code": "INVALID_CREDENTIALS",
+  "message": "Invalid email or password",
+  "requestId": "b07de9e2-d849-493d-94e6-df7a6059f955",
+  "timestamp": "2026-11-25T10:00:01.000Z"
+}
+```
+
+| HTTP      | Codes                                                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------------------------------------ |
+| 400       | `VALIDATION_FAILED`, `MALFORMED_JSON`, `INVALID_UUID`, `INVALID_DEVICE_AMOUNT`, `INVALID_CONTRACT_UPDATE`, `BAD_REQUEST` |
+| 401       | `UNAUTHORIZED`, `INVALID_CREDENTIALS`                                                                                    |
+| 403       | `FORBIDDEN`                                                                                                              |
+| 404       | `NOT_FOUND` for missing and inaccessible resources, `ROUTE_NOT_FOUND` for unmatched routes                               |
+| 409       | `EMAIL_ALREADY_REGISTERED`, `CONFLICT`                                                                                   |
+| 413 / 415 | `PAYLOAD_TOO_LARGE` / `UNSUPPORTED_MEDIA_TYPE`                                                                           |
+| 429       | `RATE_LIMITED`, with the existing `Retry-After` header                                                                   |
+| 500       | `INTERNAL_ERROR`                                                                                                         |
+| 503       | `DATABASE_UNAVAILABLE` for recognized connection failures, `SERVICE_UNAVAILABLE` for other expressed outages             |
+
+Other HTTP exceptions retain their status with a generic `HTTP_ERROR` or
+`INTERNAL_ERROR` code. Validation messages omit input values and unknown field
+names. Phase 6 replaces the previous Nest and parser error shapes, and recognized
+database connectivity failures now return 503. Readiness still returns
+`{"status":"unavailable"}` on failure, with the correlation ID in the header.
+
+## Logs and local troubleshooting
+
+`LOG_LEVEL` defaults to `info`. Supported levels are `trace`, `debug`, `info`,
+`warn`, `error`, `fatal` and `silent`. Local and container runs emit JSON.
+HTTP completion logs use info for successful requests, warn for 4xx and error
+for 5xx. Startup and HTTP events go to stdout. A bootstrap failure emits a
+generic JSON event to stderr. Compose injects the API log level at runtime.
+
+```json
+{
+  "level": 40,
+  "time": 1795600800000,
+  "event": "http_request_completed",
+  "requestId": "5eaaa702-477a-4f3a-93ad-864ff5bbb83d",
+  "method": "POST",
+  "route": "/api/v1/contracts",
+  "statusCode": 400,
+  "durationMs": 2.41,
+  "errorCode": "VALIDATION_FAILED"
+}
+```
+
+Use `curl -i` to see the request ID and search for it in the local console or
+`docker compose logs --tail=200 api`. For database failures, check
+`/api/v1/health/ready` and the PostgreSQL and migration service logs. If the
+process logs `startup_failed`, verify the required environment variables and
+that the configured port is free.
+
+HTTP records use only server-defined route templates and safe metadata. URLs,
+query strings, bodies, headers, emails, credentials and SQL are omitted.
+Pino redaction and sanitized error serialization provide a second layer.
+Correlation is local to this API instance and does not include downstream spans,
+aggregated metrics or a log retention service.
+
 ## Prisma and migrations
 
 ```bash

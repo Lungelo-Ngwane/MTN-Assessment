@@ -7,6 +7,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { PrismaService } from '../src/database/prisma.service';
+import { expectApiError } from './expect-api-error';
 
 const root = '/api/v1/auth';
 const email = 'member@example.test';
@@ -63,7 +64,11 @@ describe('Authentication with PostgreSQL', () => {
       register('concurrent@example.test'),
     ]);
     expect(responses.map(({ status }) => status).sort()).toEqual([201, 409]);
-    await register('CONCURRENT@example.test').expect(409);
+    expectApiError(
+      await register('CONCURRENT@example.test').expect(409),
+      409,
+      'EMAIL_ALREADY_REGISTERED',
+    );
     await expect(
       prisma.client.user.count({ where: { email: 'concurrent@example.test' } }),
     ).resolves.toBe(1);
@@ -105,8 +110,14 @@ describe('Authentication with PostgreSQL', () => {
   it('uses the same credential rejection for incorrect passwords and unknown emails', async () => {
     const wrong = await login(email, 'wrong passphrase').expect(401);
     const unknown = await login('missing@example.test').expect(401);
-    expect(wrong.body).toEqual(unknown.body);
-    expect(wrong.body).toMatchObject({ message: 'Invalid email or password' });
+    expect(
+      expectApiError(
+        wrong,
+        401,
+        'INVALID_CREDENTIALS',
+        'Invalid email or password',
+      ),
+    ).toEqual(expectApiError(unknown, 401, 'INVALID_CREDENTIALS'));
   });
 
   it('rejects tokens for nonexistent and deleted users', async () => {

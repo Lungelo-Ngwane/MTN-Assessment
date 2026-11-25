@@ -6,11 +6,9 @@ import {
   HttpCode,
   HttpStatus,
   Post,
-  UseFilters,
   UseGuards,
 } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
-import { AuthExceptionFilter } from './auth-exception.filter';
 import { AuthService } from './auth.service';
 import { LoginDto, RegisterDto } from './credentials.dto';
 import { CurrentUser } from './current-user.decorator';
@@ -18,7 +16,6 @@ import type { AuthenticatedUser } from './jwt.strategy';
 import { Public } from './public.decorator';
 
 @Controller({ path: 'auth', version: '1' })
-@UseFilters(AuthExceptionFilter)
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 

@@ -9,3 +9,4 @@ process.env.JWT_TTL_SECONDS = '900';
 process.env.AUTH_RATE_LIMIT = '30';
 process.env.AUTH_RATE_WINDOW_SECONDS = '60';
 process.env.CORS_ORIGINS = 'https://client.example.test';
+process.env.LOG_LEVEL = 'silent';

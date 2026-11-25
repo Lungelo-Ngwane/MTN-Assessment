@@ -1,4 +1,4 @@
-import { INestApplication, Logger } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
@@ -7,6 +7,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { UserRepository } from '../src/users/user.repository';
+import { expectApiError } from './expect-api-error';
 
 const root = '/api/v1/auth';
 const valid = { email: 'client@example.test', password: 'test passphrase!' };
@@ -47,18 +48,17 @@ describe('Authentication HTTP boundaries', () => {
   });
 
   it('limits body sizes and redacts invalid JSON errors', async () => {
-    await http()
+    const oversized = await http()
       .post(`${root}/register`)
       .send({ ...valid, password: 'x'.repeat(17000) })
       .expect(413);
-    await http()
+    expectApiError(oversized, 413, 'PAYLOAD_TOO_LARGE');
+    const malformed = await http()
       .post(`${root}/register`)
       .type('json')
       .send('fixture-private-token')
-      .expect(400, {
-        statusCode: 400,
-        message: 'Bad Request',
-      });
+      .expect(400);
+    expectApiError(malformed, 400, 'MALFORMED_JSON');
   });
 
   it('sends security headers and allows only explicitly configured browser origins', async () => {
@@ -108,18 +108,14 @@ describe('Authentication HTTP boundaries', () => {
     const lookup = jest
       .spyOn(app.get(UserRepository), 'findCredentialsByEmail')
       .mockRejectedValue(new Error('fixture-private-token'));
-    const log = jest
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation(() => undefined);
     try {
-      await http().post(`${root}/login`).send(valid).expect(500, {
-        statusCode: 500,
-        message: 'Internal Server Error',
-      });
-      expect(log).toHaveBeenCalledWith('Authentication request failed');
+      const response = await http()
+        .post(`${root}/login`)
+        .send(valid)
+        .expect(500);
+      expectApiError(response, 500, 'INTERNAL_ERROR', 'Internal Server Error');
     } finally {
       lookup.mockRestore();
-      log.mockRestore();
     }
   });
 
@@ -130,6 +126,8 @@ describe('Authentication HTTP boundaries', () => {
         .set('X-Forwarded-For', `192.0.2.${attempt + 1}`)
         .send({});
       if (response.status === 429) {
+        expectApiError(response, 429, 'RATE_LIMITED');
+        expect(response.headers['retry-after']).toBeDefined();
         await http()
           .post(`${root}/register`)
           .set('X-Forwarded-For', '198.51.100.1')

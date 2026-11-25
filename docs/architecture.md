@@ -232,6 +232,42 @@ The runtime image installs production dependencies and omits optional
 dependencies, including the Prisma CLI that npm can otherwise install as an
 optional client peer.
 
+## HTTP observability
+
+`http/` contains the global exception filter, shared response formatter,
+request middleware, validation adapter and Pino options. `APP_FILTER`
+registers the filter through Nest dependency injection. The Express
+parser error handler runs ahead of Nest controllers and sends the same
+envelope. These boundaries preserve status codes and existing headers.
+The former authentication filter and controller-level repayment mappings
+are handled centrally. The exception filter maps existing domain errors,
+standard HTTP exceptions and recognized Prisma connectivity failures.
+Other exceptions become generic HTTP 500. Readiness keeps its dedicated
+public body for compatibility.
+
+The earliest HTTP middleware generates a UUID, writes it to
+`X-Request-ID` and stores it in response locals. The response formatter
+uses those locals for errors. A single completion listener closes over
+the same ID and duration clock. No request-scoped provider or shared
+mutable current-request pointer is needed. Incoming IDs are ignored.
+The CORS allowlist exposes the response header to approved browsers.
+
+NestJS Pino bridges application and buffered startup messages to JSON.
+Automatic pino-http request logging is disabled. Our completion listener
+emits one event with method, matched route template, status, duration,
+request ID and optional safe error code. Parser failures, unmatched
+routes and preflight requests may use the `unmatched` route label.
+Aborted responses emit one abort event with log status 499. Exceptions
+are represented by the same completion record, which avoids duplicate
+logs. Startup failure output is generic and uses stderr.
+
+HTTP event construction excludes request and response objects, raw paths,
+queries and credential material. Defensive Pino redaction covers common
+sensitive fields and replaces serialized errors with a fixed message.
+Validation responses omit raw values and field names. This is request
+correlation within the service. Cross-service tracing, metrics and a
+log aggregation or retention pipeline are outside this phase.
+
 ## Verification and trade-offs
 
 Unit and HTTP end-to-end tests contribute to the Jest coverage report. The

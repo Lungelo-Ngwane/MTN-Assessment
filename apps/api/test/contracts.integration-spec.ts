@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import type { ContractRecord } from '../src/contracts/contract.repository';
 import { PrismaService } from '../src/database/prisma.service';
+import { expectApiError } from './expect-api-error';
 
 const path = '/api/v1/contracts';
 const options = [
@@ -137,7 +138,9 @@ describe('Contract CRUD against PostgreSQL', () => {
       .get(`${path}/${randomUUID()}`)
       .auth(alice, bearer)
       .expect(404);
-    expect(hidden.body).toEqual(missing.body);
+    expect(expectApiError(hidden, 404, 'NOT_FOUND')).toEqual(
+      expectApiError(missing, 404, 'NOT_FOUND'),
+    );
     await http()
       .patch(`${path}/${foreign.id}`)
       .auth(alice, bearer)

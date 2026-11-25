@@ -39,6 +39,7 @@ services:
       AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-10}
       AUTH_RATE_WINDOW_SECONDS: ${AUTH_RATE_WINDOW_SECONDS:-60}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       migrate:
         condition: service_completed_successfully
