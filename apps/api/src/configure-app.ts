@@ -10,11 +10,13 @@ import {
   REQUEST_ID_HEADER,
 } from './http/request-logging';
 import { RequestValidationPipe } from './http/request-validation';
+import { HttpMetrics } from './monitoring/http-metrics';
 import { configureOpenApi } from './openapi/configure-openapi';
 
 export function configureApp(app: INestApplication): void {
   const config = app.get(ConfigService<Environment, true>);
-  app.use(logRequests(app.get(Logger)));
+  const metrics = app.get(HttpMetrics);
+  app.use(logRequests(app.get(Logger), metrics));
   app.use(helmet());
   app.enableCors({
     origin: config.get('CORS_ORIGINS', { infer: true }),

@@ -41,6 +41,10 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+      METRICS_ENABLED: ${METRICS_ENABLED:-false}
+      METRICS_BIND: ${METRICS_BIND:-127.0.0.1}
+      METRICS_PORT: ${METRICS_PORT:-9464}
+      METRICS_PATH: ${METRICS_PATH:-/metrics}
     depends_on:
       migrate:
         condition: service_completed_successfully

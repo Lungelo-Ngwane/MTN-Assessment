@@ -1,0 +1,39 @@
+groups:
+  - name: contract-repayment-api
+    rules:
+      - alert: ContractRepaymentApiTargetUnavailable
+        expr: up{job="contract-repayment-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: API metrics target cannot be scraped
+          description: Check API container health, listener configuration and monitoring network connectivity.
+      - alert: ContractRepaymentApiHighErrorRate
+        expr: |
+          (
+            sum by (job, instance) (rate(http_requests_total{job="contract-repayment-api", route=~"/api/v1/.*", status_code=~"5.."}[5m]))
+            /
+            sum by (job, instance) (rate(http_requests_total{job="contract-repayment-api", route=~"/api/v1/.*"}[5m]))
+          ) > 0.05
+          and
+          sum by (job, instance) (increase(http_requests_total{job="contract-repayment-api", route=~"/api/v1/.*"}[5m])) >= 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 5 percent of API requests return HTTP 5xx
+          description: Inspect failing routes in metrics, then correlate structured error logs and database readiness.
+      - alert: ContractRepaymentApiHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (job, instance, le) (rate(http_request_duration_seconds_bucket{job="contract-repayment-api", route=~"/api/v1/.*"}[5m]))
+          ) > 0.5
+          and
+          sum by (job, instance) (increase(http_requests_total{job="contract-repayment-api", route=~"/api/v1/.*"}[5m])) >= 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: API request p95 exceeds 500 milliseconds
+          description: Inspect route-level latency and compare database and runtime signals before tuning.

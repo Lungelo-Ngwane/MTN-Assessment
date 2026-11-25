@@ -24,6 +24,7 @@
     "test:cov:all": "node scripts/test-integration.cjs --coverage",
     "check": "npm run build && npm run typecheck && npm run lint && npm run format:check && npm run test:cov:all",
     "test:integration": "node scripts/test-integration.cjs",
+    "test:performance": "node scripts/performance.cjs",
     "prisma:generate": "npm run prisma:generate --workspace apps/api",
     "db:migrate:dev": "npm run db:migrate:dev --workspace apps/api --",
     "db:migrate:deploy": "npm run db:migrate:deploy --workspace apps/api",
