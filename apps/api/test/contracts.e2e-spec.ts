@@ -7,6 +7,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { ContractRepository } from '../src/contracts/contract.repository';
+import { expectApiError } from './expect-api-error';
 
 const path = '/api/v1/contracts';
 const target = `${path}/${randomUUID()}`;
@@ -103,9 +104,7 @@ describe('Contract HTTP validation', () => {
 
   it('returns a generic error for persistence failures', async () => {
     list.mockRejectedValueOnce(new Error('fixture database secret'));
-    await http()
-      .get(path)
-      .auth(token, bearer)
-      .expect(500, { statusCode: 500, message: 'Internal server error' });
+    const response = await http().get(path).auth(token, bearer).expect(500);
+    expectApiError(response, 500, 'INTERNAL_ERROR', 'Internal Server Error');
   });
 });

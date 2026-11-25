@@ -1,3 +1,13 @@
+const LOG_LEVELS = [
+  'trace',
+  'debug',
+  'info',
+  'warn',
+  'error',
+  'fatal',
+  'silent',
+] as const;
+
 export interface Environment {
   NODE_ENV: 'development' | 'test' | 'production';
   PORT: number;
@@ -9,6 +19,7 @@ export interface Environment {
   AUTH_RATE_LIMIT: number;
   AUTH_RATE_WINDOW_SECONDS: number;
   CORS_ORIGINS: string[];
+  LOG_LEVEL: (typeof LOG_LEVELS)[number];
 }
 
 function positiveInteger(
@@ -100,6 +111,14 @@ export function validateEnvironment(
     );
   }
 
+  const requestedLevel = input.LOG_LEVEL ?? 'info';
+  const logLevel = LOG_LEVELS.find((level) => level === requestedLevel);
+  if (!logLevel) {
+    throw new Error(
+      'LOG_LEVEL must be trace, debug, info, warn, error, fatal, or silent',
+    );
+  }
+
   return {
     NODE_ENV: mode,
     PORT: port,
@@ -134,5 +153,6 @@ export function validateEnvironment(
       3600,
     ),
     CORS_ORIGINS: corsOrigins(input.CORS_ORIGINS),
+    LOG_LEVEL: logLevel,
   };
 }
