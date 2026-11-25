@@ -3,7 +3,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/package.json
-RUN npm ci --include=dev
+RUN npm ci --include=dev --workspace apps/api --include-workspace-root
 COPY apps/api apps/api
 RUN npm run build
 
@@ -12,7 +12,7 @@ ENV NODE_ENV=production PORT=3000
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/package.json
-RUN npm ci --omit=dev --omit=optional
+RUN npm ci --omit=dev --omit=optional --workspace apps/api
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 USER node
 EXPOSE 3000

@@ -376,6 +376,43 @@ times for one seeded dataset. The measured first-page performance did not
 justify an index, pool or pagination change. The dataset and closed-loop
 run do not establish production capacity or deep-page latency under load.
 
+## Web frontend
+
+`apps/web` uses React, Vite and TypeScript. React Router separates public
+registration and login from the calculator, paginated My Contracts and
+contract details. Tailwind and checked-in shadcn-style components use the
+same visual tokens. The Radix alert dialog gives deletion a modal focus
+trap and an explicit cancel action. Forms use React Hook Form and Zod.
+
+The typed API client uses the existing versioned REST routes and passes
+monetary values as decimal strings. It maps recognized error statuses and
+codes to user-facing messages and preserves the request ID without displaying
+raw server text. The API performs every quote and contract recalculation.
+Editing or clearing an amount cancels the pending preview and invalidates the
+previous quote. Contract updates use mutation results and invalidate the list.
+
+The auth provider keeps the access token in memory. A session owns an abort
+controller and a fresh TanStack Query client. Sign-out, expiry or a protected
+401 aborts its requests, clears its queries and mutations, and unmounts the
+protected workspace. A response from a previous session cannot expire a
+replacement session. Reloading starts a signed-out session. Sign-out does
+not revoke JWTs server-side.
+
+Vite proxies to a validated development API origin. The optional production
+Compose service serves the static build with Nginx, forwards only
+`/api/v1/` to the API on the private Compose network, and handles history
+navigation for frontend routes. Swagger and Prometheus keep their existing
+entry points. The included web server uses loopback HTTP. Production requires
+a TLS ingress, and clients sharing this proxy also share the API's IP-based
+authentication rate-limit bucket. The sample keeps the backend's existing IP
+trust policy.
+
+Playwright exercises registration, login, quote selection, create, edit preview,
+deletion and sign-out against a disposable PostgreSQL stack. The workflow also
+checks for horizontal overflow at both viewports and checks dialog focus and
+Escape behavior. The frontend does not add browser-side finance logic or
+persist access credentials.
+
 ## Verification and trade-offs
 
 Unit tests exercise financial invariants, configuration and database error

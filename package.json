@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "apps/api"
+    "apps/api",
+    "apps/web"
   ],
   "engines": {
     "node": "^24.21.0",
@@ -11,6 +12,11 @@
   },
   "scripts": {
     "dev": "npm run dev --workspace apps/api",
+    "dev:web": "npm run dev --workspace apps/web",
+    "build:web": "npm run build --workspace apps/web",
+    "test:web": "npm run test --workspace apps/web",
+    "check:web": "npm run build:web && npm run test:web",
+    "test:browser": "node scripts/test-web-browser.cjs",
     "start": "npm run start --workspace apps/api",
     "build": "npm run build --workspace apps/api",
     "typecheck": "npm run typecheck --workspace apps/api",
