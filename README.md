@@ -191,6 +191,75 @@ The annual rate is in percentage points, as in the existing database schema.
 See the [strategy and rounding decisions](docs/architecture.md#repayment-calculation)
 for details on changing the engine.
 
+## Manage contracts
+
+Contracts are editable repayment arrangements. They represent saved quotes.
+The API uses the bearer token's subject as the owner, and only the owner can
+list, read, update or delete a contract.
+
+| Method and path                            | Success                                      |
+| ------------------------------------------ | -------------------------------------------- |
+| `POST /api/v1/contracts`                   | HTTP 201 with the server-calculated snapshot |
+| `GET /api/v1/contracts?page=1&pageSize=20` | HTTP 200 with an owner-scoped page           |
+| `GET /api/v1/contracts/:id`                | HTTP 200 with the selected contract          |
+| `PATCH /api/v1/contracts/:id`              | HTTP 200 with the recalculated snapshot      |
+| `DELETE /api/v1/contracts/:id`             | HTTP 204 with an empty body                  |
+
+```bash
+curl -i "$api/contracts" -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"deviceAmount":"15000.00","termMonths":12}'
+
+curl -i "$api/contracts?page=1&pageSize=20" -H "Authorization: Bearer $ACCESS_TOKEN"
+curl -i "$api/contracts/$CONTRACT_ID" -H "Authorization: Bearer $ACCESS_TOKEN"
+curl -i -X PATCH "$api/contracts/$CONTRACT_ID" -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"termMonths":24}'
+curl -i -X DELETE "$api/contracts/$CONTRACT_ID" -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+Set `CONTRACT_ID` to the UUID returned by creation. The example create response
+contains the stored inputs and financial snapshot.
+
+```json
+{
+  "id": "b3f6ce37-57f2-493b-bfd1-9dc4b3c4a05c",
+  "userId": "e57cb305-a042-4ee5-b58f-24c2bbe5bf6e",
+  "deviceAmount": "15000.00",
+  "termMonths": 12,
+  "interestRate": "6.500000",
+  "monthlyRepayment": "1294.45",
+  "finalRepayment": "1294.41",
+  "totalRepayment": "15533.36",
+  "totalInterest": "533.36",
+  "calculationMethod": "reducing-balance-amortisation",
+  "calculationVersion": 1,
+  "createdAt": "2026-11-25T12:00:00.000Z",
+  "updatedAt": "2026-11-25T12:00:00.000Z"
+}
+```
+
+Create requires a decimal string in the same range as the comparison quote and
+a JSON number of 12, 24 or 36 for `termMonths`. Patch requires at least one of
+these fields. Request bodies that include financial outputs, ownership or
+other properties return HTTP 400. Invalid UUIDs and pagination also return
+HTTP 400. Missing or invalid tokens return HTTP 401. Missing and foreign
+contract IDs both return HTTP 404.
+
+Page numbering starts at 1. The default page size is 20 and the maximum is 100. The maximum page number is 1,000,000. Results sort by descending
+`createdAt` and descending UUID for ties. An empty first page looks like this.
+
+```json
+{
+  "items": [],
+  "pagination": { "page": 1, "pageSize": 20, "total": 0, "totalPages": 0 }
+}
+```
+
+Deletion is permanent. Existing records from before Phase 5 may return null
+for `finalRepayment`, `calculationMethod` and `calculationVersion`. A successful
+PATCH generates a complete snapshot under the current policy. For a legacy
+record with unsupported inputs, provide replacements for those inputs.
+
 ## Prisma and migrations
 
 ```bash
@@ -210,6 +279,11 @@ existing database, stop and investigate the drift.
 The Phase 3 migration canonicalizes existing emails in one transaction.
 Resolve any normalized duplicates before deploying. A collision rolls back
 the migration.
+
+The Phase 5 migration keeps historical values intact, adds snapshot
+metadata and final repayment fields, and enforces reconciliation on new
+and updated rows. It also replaces the owner-only index with an index
+covering owner, creation time and UUID.
 
 Build and watch mode generate the client automatically. After a fresh
 `npm ci`, run `npm run prisma:generate` before standalone TypeScript, lint,

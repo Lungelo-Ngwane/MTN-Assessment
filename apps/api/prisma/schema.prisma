@@ -26,10 +26,13 @@ model Contract {
   interestRate     Decimal  @db.Decimal(9, 6)
   termMonths       Int
   monthlyRepayment Decimal  @db.Decimal(14, 2)
+  finalRepayment   Decimal? @db.Decimal(14, 2)
   totalRepayment   Decimal  @db.Decimal(14, 2)
   totalInterest    Decimal  @db.Decimal(14, 2)
+  calculationMethod String?
+  calculationVersion Int?
   createdAt        DateTime @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
-  @@index([userId])
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
 }

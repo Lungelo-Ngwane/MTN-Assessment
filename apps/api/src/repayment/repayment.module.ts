@@ -10,5 +10,6 @@ import { RepaymentService } from './repayment.service';
     RepaymentService,
     { provide: REPAYMENT_CALCULATOR, useClass: AmortisedRepaymentCalculator },
   ],
+  exports: [RepaymentService],
 })
 export class RepaymentModule {}

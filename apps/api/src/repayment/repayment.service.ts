@@ -1,10 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   REPAYMENT_CALCULATOR,
+  REPAYMENT_TERMS,
   type RepaymentCalculator,
+  type RepaymentTerm,
 } from './repayment-calculator';
 
-const TERMS = [12, 24, 36];
 const ANNUAL_RATE = '6.500000';
 
 @Injectable()
@@ -15,7 +16,7 @@ export class RepaymentService {
   ) {}
 
   calculate(amount: string) {
-    const options = TERMS.map((term) =>
+    const options = REPAYMENT_TERMS.map((term) =>
       this.calculator.calculate(amount, ANNUAL_RATE, term),
     );
     const [whole, fraction = ''] = amount.split('.');
@@ -25,6 +26,21 @@ export class RepaymentService {
       annualInterestRate: ANNUAL_RATE,
       calculationMethod: this.calculator.method,
       options,
+    };
+  }
+
+  snapshot(amount: string, term: RepaymentTerm) {
+    const quote = this.calculate(amount);
+    const selected = quote.options.find((option) => option.termMonths === term);
+    if (!selected) {
+      throw new RangeError('Unsupported repayment term');
+    }
+    return {
+      ...selected,
+      deviceAmount: quote.deviceAmount,
+      interestRate: quote.annualInterestRate,
+      calculationMethod: quote.calculationMethod,
+      calculationVersion: this.calculator.version,
     };
   }
 }
