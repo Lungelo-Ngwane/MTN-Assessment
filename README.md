@@ -380,3 +380,20 @@ or Jest commands.
 | `npm run test:cov`                         | Measure unit and end-to-end coverage in `apps/api/coverage/`.                                                                                        |
 | `npm run build` and `npm start`            | Generate and compile the API, then run it locally.                                                                                                   |
 | `npm audit --omit=dev --omit=optional`     | Audit the dependency set installed in the runtime image.                                                                                             |
+| `npm audit --omit=dev --include=optional`  | Audit production dependencies including optional packages.                                                                                           |
+| `npm run test:cov:all`                     | Run unit, HTTP and PostgreSQL suites in one Jest invocation and enforce coverage thresholds. Requires Docker.                                        |
+| `npm run check`                            | Build, typecheck, lint, check formatting and run the combined coverage gate. Requires Docker.                                                        |
+
+For quick local feedback, use `npm test` or `npm run test:cov`. The latter
+writes its unit and HTTP report to `apps/api/coverage/`. Use
+`npm run test:integration` to run only the PostgreSQL suite. Both Docker
+test commands deploy migrations into a disposable database with no published
+port and remove the test stack on exit. They require a running Docker
+engine and no development database or local `.env`.
+
+The combined report is generated directly by Jest in the test container
+and written to `apps/api/coverage/combined/`. Open
+`apps/api/coverage/combined/lcov-report/index.html` for file-level results.
+The gate requires **90% statements, 85% branches, 90% functions and 90% lines**.
+The combined command also checks for open handles. GitHub Actions runs the
+same quality command and the production audit on pull requests.

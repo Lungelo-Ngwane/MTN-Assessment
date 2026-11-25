@@ -1,4 +1,8 @@
-import { ForbiddenException, INestApplication } from '@nestjs/common';
+import {
+  BadGatewayException,
+  ForbiddenException,
+  INestApplication,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
@@ -191,6 +195,61 @@ describe('HTTP errors and request correlation', () => {
       .get(`${health}/ready`)
       .expect(503, { status: 'unavailable' });
     expect(logFor(readiness)).toMatchObject({ level: 50, statusCode: 503 });
+  });
+
+  it('returns correlated 503s when credential lookup or contract insertion cannot connect', async () => {
+    const login = await http()
+      .post('/api/v1/auth/login')
+      .send({ email, password })
+      .expect(503);
+    const create = await http()
+      .post(contracts)
+      .auth(token, bearer)
+      .send({ deviceAmount: '15000.00', termMonths: 12 })
+      .expect(503);
+    for (const response of [login, create]) {
+      expectApiError(response, 503, 'DATABASE_UNAVAILABLE');
+      expect(logFor(response)).toMatchObject({
+        level: 50,
+        errorCode: 'DATABASE_UNAVAILABLE',
+      });
+      expect(response.text).not.toContain('127.0.0.1');
+    }
+  });
+
+  it('rejects unsupported JSON charsets before authentication without exposing the body', async () => {
+    const response = await http()
+      .post(contracts)
+      .set('Content-Type', 'application/json; charset=iso-8859-1')
+      .send(JSON.stringify({ password }))
+      .expect('X-Content-Type-Options', 'nosniff')
+      .expect(415);
+    expectApiError(response, 415, 'UNSUPPORTED_MEDIA_TYPE');
+    expect(logFor(response)).toMatchObject({
+      level: 40,
+      route: 'unmatched',
+      statusCode: 415,
+    });
+    expect(response.text).not.toContain(password);
+    expect(lines.join('')).not.toContain(password);
+  });
+
+  it('keeps an upstream HTTP status but discards its internal error message', async () => {
+    jest
+      .spyOn(app.get(ContractRepository), 'list')
+      .mockRejectedValueOnce(new BadGatewayException(database));
+    const response = await http()
+      .get(contracts)
+      .auth(token, bearer)
+      .expect(502);
+    expectApiError(response, 502, 'INTERNAL_ERROR', 'Internal Server Error');
+    expect(logFor(response)).toMatchObject({
+      level: 50,
+      statusCode: 502,
+      errorCode: 'INTERNAL_ERROR',
+    });
+    expect(response.text).not.toContain(database);
+    expect(lines.join('')).not.toContain(database);
   });
 
   it('uses a generic authorisation message for forbidden operations', async () => {

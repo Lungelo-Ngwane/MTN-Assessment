@@ -12,17 +12,22 @@ import { expectApiError } from './expect-api-error';
 const root = '/api/v1/auth';
 const valid = { email: 'client@example.test', password: 'test passphrase!' };
 
+async function createTestApp() {
+  const module = await Test.createTestingModule({
+    imports: [AppModule],
+  }).compile();
+  const app = module.createNestApplication<INestApplication<Server>>();
+  configureApp(app);
+  await app.init();
+  return app;
+}
+
 describe('Authentication HTTP boundaries', () => {
   let app: INestApplication<Server>;
   const http = () => request(app.getHttpServer());
 
   beforeAll(async () => {
-    const module = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-    app = module.createNestApplication<INestApplication<Server>>();
-    configureApp(app);
-    await app.init();
+    app = await createTestApp();
   });
 
   afterAll(async () => {
@@ -120,24 +125,23 @@ describe('Authentication HTTP boundaries', () => {
   });
 
   it('limits authentication attempts and ignores forwarded IP headers', async () => {
-    for (let attempt = 0; attempt < 30; attempt++) {
-      const response = await http()
+    const isolated = await createTestApp();
+    const send = (address: string) =>
+      request(isolated.getHttpServer())
         .post(`${root}/register`)
-        .set('X-Forwarded-For', `192.0.2.${attempt + 1}`)
+        .set('X-Forwarded-For', address)
         .send({});
-      if (response.status === 429) {
-        expectApiError(response, 429, 'RATE_LIMITED');
-        expect(response.headers['retry-after']).toBeDefined();
-        await http()
-          .post(`${root}/register`)
-          .set('X-Forwarded-For', '198.51.100.1')
-          .send({})
-          .expect(429);
-        await http().get('/api/v1/health').expect(200);
-        return;
+    try {
+      for (let attempt = 0; attempt < 30; attempt++) {
+        await send(`192.0.2.${attempt + 1}`).expect(400);
       }
-      expect(response.status).toBe(400);
+      const response = await send('192.0.2.31').expect(429);
+      expectApiError(response, 429, 'RATE_LIMITED');
+      expect(response.headers['retry-after']).toBeDefined();
+      await send('198.51.100.1').expect(429);
+      await request(isolated.getHttpServer()).get('/api/v1/health').expect(200);
+    } finally {
+      await isolated.close();
     }
-    throw new Error('Expected the authentication rate limit to apply');
   });
 });
