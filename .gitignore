@@ -2,6 +2,8 @@ node_modules/
 .npm-cache/
 dist/
 coverage/
+test-results/
+playwright-report/
 apps/api/src/generated/
 *.tsbuildinfo
 *.log

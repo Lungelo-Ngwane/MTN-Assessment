@@ -4,6 +4,60 @@ The NestJS API provides liveness and PostgreSQL readiness endpoints. Prisma
 repositories persist users and contract calculation snapshots. See the
 [architecture decisions](docs/architecture.md) for the schema and repository design.
 
+## Device Finance web app
+
+With the root `.env` prepared as described below, start the API, PostgreSQL
+and production frontend together.
+
+```bash
+docker compose -f compose.yaml -f compose.web.yaml up --build -d --wait
+```
+
+Open [Device Finance](http://localhost:8080). Register, sign in, enter
+`15000.00`, calculate the three repayment options, select a term and save
+it. Open **My Contracts** to view, preview edits or delete a saved contract.
+The browser holds the JWT only in memory. Refreshing, closing the tab or
+session expiry requires signing in again. Saved contracts remain in PostgreSQL.
+The API continues to run on [port 3000](http://localhost:3000/api/docs) with
+its existing configuration. Set `WEB_PORT` in the root environment to change
+the frontend’s loopback host port.
+
+To keep Prometheus running alongside the web app, include
+`-f compose.monitoring.yaml` before `up`. For the API-only workflow, use
+the base Compose file. To stop just the frontend without stopping the API,
+run `docker compose -f compose.yaml -f compose.web.yaml stop web`.
+
+### Frontend development and testing
+
+```bash
+npm ci
+npm run dev:web
+npm run check:web
+npm run check
+npx playwright install chromium
+npm run test:browser
+```
+
+The Vite server is at [localhost:5173](http://localhost:5173) and proxies
+`/api` to `http://127.0.0.1:3000`. Set `API_PROXY_TARGET` to a bare HTTP(S)
+origin in `apps/web/.env.local` if the API runs elsewhere. In Docker, Nginx
+serves the production build and proxies versioned API calls on the same
+origin without changing CORS. The frontend does not proxy Swagger or metrics.
+
+Vitest covers validation, protected navigation, session expiry, account
+isolation, stale quotes, contract changes, and API feedback. Playwright runs
+the desktop and mobile Chromium workflows against a new Compose project and
+disposable PostgreSQL volume. It saves screenshots to
+`apps/web/test-results/screenshots`. Use `BROWSER_WEB_PORT` and
+`BROWSER_API_PORT` if the test ports 36850 and 36851 are occupied, or
+`PLAYWRIGHT_CHANNEL=chrome` to use an installed Chrome.
+
+The web app supports modern browsers. Sign-out clears the browser session
+but does not revoke an already-issued JWT on the server. The included web
+endpoint is loopback HTTP. A public deployment needs TLS and ingress controls.
+See the [frontend architecture](docs/architecture.md#web-frontend) for more
+on session isolation and proxy limits.
+
 ## Local API with PostgreSQL in Docker
 
 Use Node.js 24.21.0, npm 11.19.0, Docker Desktop, and Docker Compose. From the
