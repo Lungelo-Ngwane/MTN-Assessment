@@ -21,11 +21,25 @@ export interface Environment {
   CORS_ORIGINS: string[];
   LOG_LEVEL: (typeof LOG_LEVELS)[number];
   SWAGGER_ENABLED: boolean;
+  METRICS_ENABLED: boolean;
+  METRICS_BIND: '127.0.0.1' | '0.0.0.0';
+  METRICS_PORT: number;
+  METRICS_PATH: string;
+}
+
+export class EnvironmentValidationError extends Error {
+  constructor(
+    readonly field: keyof Environment,
+    requirement: string,
+  ) {
+    super(`${field} ${requirement}`);
+    this.name = 'EnvironmentValidationError';
+  }
 }
 
 function positiveInteger(
   value: unknown,
-  key: string,
+  key: keyof Environment,
   fallback: string,
   max: number,
 ): number {
@@ -33,14 +47,17 @@ function positiveInteger(
   const number =
     typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : NaN;
   if (!Number.isInteger(number) || number < 1 || number > max) {
-    throw new Error(`${key} must be an integer from 1 to ${max}`);
+    throw new EnvironmentValidationError(
+      key,
+      `must be an integer from 1 to ${max}`,
+    );
   }
   return number;
 }
 
 function tokenIdentifier(
   value: unknown,
-  key: string,
+  key: keyof Environment,
   fallback: string,
 ): string {
   const identifier = value ?? fallback;
@@ -48,7 +65,10 @@ function tokenIdentifier(
     typeof identifier !== 'string' ||
     !/^[\x21-\x7e]{1,200}$/.test(identifier)
   ) {
-    throw new Error(`${key} must be a nonempty identifier without spaces`);
+    throw new EnvironmentValidationError(
+      key,
+      'must be a nonempty identifier without spaces',
+    );
   }
   return identifier;
 }
@@ -56,7 +76,10 @@ function tokenIdentifier(
 function corsOrigins(value: unknown): string[] {
   if (value === undefined || value === '') return [];
   if (typeof value !== 'string')
-    throw new Error('CORS_ORIGINS must list HTTP(S) origins');
+    throw new EnvironmentValidationError(
+      'CORS_ORIGINS',
+      'must list HTTP(S) origins',
+    );
   const origins = value.split(',').map((origin) => origin.trim());
   if (
     origins.some((origin) => {
@@ -68,8 +91,9 @@ function corsOrigins(value: unknown): string[] {
       );
     })
   ) {
-    throw new Error(
-      'CORS_ORIGINS must list exact HTTP(S) origins without paths',
+    throw new EnvironmentValidationError(
+      'CORS_ORIGINS',
+      'must list exact HTTP(S) origins without paths',
     );
   }
   return origins;
@@ -80,7 +104,10 @@ export function validateEnvironment(
 ): Environment {
   const mode = input.NODE_ENV ?? 'development';
   if (mode !== 'development' && mode !== 'test' && mode !== 'production') {
-    throw new Error('NODE_ENV must be development, test, or production');
+    throw new EnvironmentValidationError(
+      'NODE_ENV',
+      'must be development, test, or production',
+    );
   }
 
   const port = positiveInteger(input.PORT, 'PORT', '3000', 65535);
@@ -96,8 +123,9 @@ export function validateEnvironment(
     !parsed.username ||
     parsed.pathname.length < 2
   ) {
-    throw new Error(
-      'DATABASE_URL must be a PostgreSQL URL with a user, host, and database',
+    throw new EnvironmentValidationError(
+      'DATABASE_URL',
+      'must be a PostgreSQL URL with a user, host, and database',
     );
   }
 
@@ -107,27 +135,54 @@ export function validateEnvironment(
     !/^[A-Za-z0-9_-]{43}$/.test(secret) ||
     Buffer.from(secret, 'base64url').toString('base64url') !== secret
   ) {
-    throw new Error(
-      'JWT_SECRET must be 32 random bytes encoded as unpadded base64url',
+    throw new EnvironmentValidationError(
+      'JWT_SECRET',
+      'must be 32 random bytes encoded as unpadded base64url',
     );
   }
 
   const requestedLevel = input.LOG_LEVEL ?? 'info';
   const logLevel = LOG_LEVELS.find((level) => level === requestedLevel);
   if (!logLevel) {
-    throw new Error(
-      'LOG_LEVEL must be trace, debug, info, warn, error, fatal, or silent',
+    throw new EnvironmentValidationError(
+      'LOG_LEVEL',
+      'must be trace, debug, info, warn, error, fatal, or silent',
     );
   }
 
-  const swaggerEnabled = input.SWAGGER_ENABLED;
-  if (
-    swaggerEnabled !== undefined &&
-    swaggerEnabled !== 'true' &&
-    swaggerEnabled !== 'false'
-  ) {
-    throw new Error('SWAGGER_ENABLED must be true or false');
+  for (const key of ['SWAGGER_ENABLED', 'METRICS_ENABLED'] as const) {
+    const value = input[key];
+    if (value !== undefined && value !== 'true' && value !== 'false') {
+      throw new EnvironmentValidationError(key, 'must be true or false');
+    }
   }
+  const metricsEnabled = input.METRICS_ENABLED === 'true';
+  const metricsBind = input.METRICS_BIND ?? '127.0.0.1';
+  if (metricsBind !== '127.0.0.1' && metricsBind !== '0.0.0.0')
+    throw new EnvironmentValidationError(
+      'METRICS_BIND',
+      'must be 127.0.0.1 or 0.0.0.0',
+    );
+  const metricsPort = positiveInteger(
+    input.METRICS_PORT,
+    'METRICS_PORT',
+    '9464',
+    65535,
+  );
+  if (metricsEnabled && metricsPort === port)
+    throw new EnvironmentValidationError(
+      'METRICS_PORT',
+      'must differ from PORT',
+    );
+  const metricsPath = input.METRICS_PATH ?? '/metrics';
+  if (
+    typeof metricsPath !== 'string' ||
+    !/^\/[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*$/.test(metricsPath)
+  )
+    throw new EnvironmentValidationError(
+      'METRICS_PATH',
+      'must be an absolute path with literal segments',
+    );
 
   return {
     NODE_ENV: mode,
@@ -165,8 +220,12 @@ export function validateEnvironment(
     CORS_ORIGINS: corsOrigins(input.CORS_ORIGINS),
     LOG_LEVEL: logLevel,
     SWAGGER_ENABLED:
-      swaggerEnabled === undefined
+      input.SWAGGER_ENABLED === undefined
         ? mode === 'development'
-        : swaggerEnabled === 'true',
+        : input.SWAGGER_ENABLED === 'true',
+    METRICS_ENABLED: metricsEnabled,
+    METRICS_BIND: metricsBind,
+    METRICS_PORT: metricsPort,
+    METRICS_PATH: metricsPath,
   };
 }

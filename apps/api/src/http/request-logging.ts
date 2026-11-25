@@ -1,11 +1,15 @@
 import type { NextFunction, Request } from 'express';
 import { randomUUID } from 'node:crypto';
 import type { Logger } from 'nestjs-pino';
+import type { HttpMetrics } from '../monitoring/http-metrics';
 import { matchedRoute, writeError, type ApiResponse } from './http-errors';
 
 export const REQUEST_ID_HEADER = 'X-Request-ID';
 
-export function logRequests(logger: Logger) {
+export function logRequests(
+  logger: Logger,
+  metrics: Pick<HttpMetrics, 'observe'>,
+) {
   return (request: Request, response: ApiResponse, next: () => void): void => {
     const started = performance.now();
     const requestId = randomUUID();
@@ -15,15 +19,18 @@ export function logRequests(logger: Logger) {
     response.once('close', () => {
       const completed = response.writableFinished;
       const statusCode = completed ? response.statusCode : 499;
+      const route = matchedRoute(request) ?? 'unmatched';
+      const durationMs = performance.now() - started;
+      metrics.observe(request.method, route, statusCode, durationMs);
       const level =
         statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'log';
       logger[level]({
         event: completed ? 'http_request_completed' : 'http_request_aborted',
         requestId,
         method: request.method,
-        route: matchedRoute(request) ?? 'unmatched',
+        route,
         statusCode,
-        durationMs: Math.round((performance.now() - started) * 100) / 100,
+        durationMs: Math.round(durationMs * 100) / 100,
         errorCode: response.locals.errorCode,
       });
     });

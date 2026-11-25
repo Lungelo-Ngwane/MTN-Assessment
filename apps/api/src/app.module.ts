@@ -9,6 +9,7 @@ import { ContractsModule } from './contracts/contracts.module';
 import { HealthModule } from './health/health.module';
 import { GlobalExceptionFilter } from './http/global-exception.filter';
 import { loggingOptions } from './http/logging-options';
+import { HttpMetrics } from './monitoring/http-metrics';
 import { RepaymentModule } from './repayment/repayment.module';
 import { UsersModule } from './users/users.module';
 
@@ -36,6 +37,9 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     RepaymentModule,
   ],
-  providers: [{ provide: APP_FILTER, useClass: GlobalExceptionFilter }],
+  providers: [
+    HttpMetrics,
+    { provide: APP_FILTER, useClass: GlobalExceptionFilter },
+  ],
 })
 export class AppModule {}

@@ -22,6 +22,12 @@ Copy the example when setting up a new checkout. Keep existing settings when
 updating a checkout. In PowerShell, use `Copy-Item .env.example .env`. Use
 `npm.cmd` if the execution policy blocks `npm.ps1`.
 
+The command fills an empty `JWT_SECRET` with a 43-character unpadded base64url
+value. A 128-character hexadecimal key fails validation. If a local key needs
+replacement, clear only the `JWT_SECRET` value and rerun the generation command.
+Replacing the key invalidates existing tokens. Leave `CORS_ORIGINS` empty for
+same-origin Swagger requests.
+
 ```bash
 curl -i http://localhost:3000/api/v1/health
 curl -i http://localhost:3000/api/v1/health/ready
@@ -33,11 +39,55 @@ query, and HTTP 503 with `{"status":"unavailable"}` during a database outage.
 
 ## Full Docker Compose stack
 
-With a root `.env` in place, run `docker compose up --build -d --wait`. The base
+Prepare the root `.env` with the copy and JWT generation commands above, then
+run `docker compose up --build -d --wait`. The base
 stack keeps PostgreSQL on the internal Compose network. A one-shot migration
 service waits for PostgreSQL, applies pending migrations, and then lets the API
 start. The API runs as an unprivileged user and Compose checks its readiness.
 The published API port is bound to loopback.
+
+### Optional Prometheus monitoring
+
+```bash
+docker compose -f compose.yaml -f compose.monitoring.yaml up --build -d --wait
+docker compose -f compose.yaml -f compose.monitoring.yaml exec -T prometheus promtool check config /etc/prometheus/config/prometheus.yml
+docker compose -f compose.yaml -f compose.monitoring.yaml exec -T prometheus promtool check rules /etc/prometheus/config/alerts.yml
+```
+
+Open [Prometheus targets](http://localhost:9090/targets) and
+[alerts](http://localhost:9090/alerts). The overlay enables a separate listener
+on port 9464 inside Docker. It publishes only the Prometheus UI, bound to
+loopback on port 9090 by default. The API port does not serve `/metrics`.
+Prometheus stores seven days of samples in its own volume.
+
+Outside the overlay, metrics are disabled by default. Set
+`METRICS_ENABLED=true` to enable them. The listener defaults to
+`METRICS_BIND=127.0.0.1`, `METRICS_PORT=9464` and `METRICS_PATH=/metrics`.
+For a container scrape, publish no listener port and restrict network access
+to trusted peers. Update the Prometheus target and path together when changing
+the listener. See the [architecture guide](docs/architecture.md#monitoring-and-alerting)
+for metric labels, alert thresholds and production boundaries.
+
+### Isolated performance and alert verification
+
+```bash
+npm run test:performance
+npm run test:performance -- --verify-alert
+```
+
+The script uses a uniquely named Compose project and disposable volumes. It
+registers and logs in once, seeds 22,000 contracts across 21 owners, and reports
+query plans, throughput, p50/p95/p99 latency and errors. Defaults are 2,000
+measured requests per endpoint, eight concurrent workers and 100 warm-up
+requests per endpoint. Set `PERF_REQUESTS` and `PERF_CONCURRENCY` to override
+those defaults, or `PERF_API_PORT` and `PERF_PROMETHEUS_PORT` if loopback
+ports 35851 and 35852 are in use. The alert option stops only the disposable
+API and waits for its target-down alert to become pending, then firing.
+
+The Windows Docker baseline measured 1,010.83 requests/s at 13.88 ms p95 for
+repayment calculation, and 534.08 requests/s at 21.18 ms p95 for authenticated
+first-page listing, with zero request errors in either scenario. See the
+[full results and database plans](docs/architecture.md#performance-and-database-review).
 
 Use `docker compose down` to remove the stack while retaining its named data
 volume. If using the local PostgreSQL override, include the same two `-f`
@@ -367,8 +417,9 @@ generic JSON event to stderr. Compose injects the API log level at runtime.
 Use `curl -i` to see the request ID and search for it in the local console or
 `docker compose logs --tail=200 api`. For database failures, check
 `/api/v1/health/ready` and the PostgreSQL and migration service logs. If the
-process logs `startup_failed`, verify the required environment variables and
-that the configured port is free.
+process logs `startup_failed` with `INVALID_ENVIRONMENT`, use the reported field
+and validation rule to correct the configuration. For `BOOTSTRAP_FAILED`, check
+whether the configured port is free and review the Compose service status.
 
 HTTP records use only server-defined route templates and safe metadata. URLs,
 query strings, bodies, headers, emails, credentials and SQL are omitted.

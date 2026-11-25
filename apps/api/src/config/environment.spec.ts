@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { validateEnvironment } from './environment';
+import { EnvironmentValidationError, validateEnvironment } from './environment';
 
 const DATABASE_URL = 'postgresql://example@localhost:5432/example';
 const JWT_SECRET = createHash('sha256')
@@ -34,6 +34,46 @@ describe('validateEnvironment', () => {
       AUTH_RATE_WINDOW_SECONDS: 60,
       CORS_ORIGINS: [],
       LOG_LEVEL: 'info',
+      METRICS_ENABLED: false,
+      METRICS_BIND: '127.0.0.1',
+      METRICS_PORT: 9464,
+      METRICS_PATH: '/metrics',
+    });
+  });
+
+  it.each([
+    ['METRICS_ENABLED', 'yes'],
+    ['METRICS_BIND', 'public.example.test'],
+    ['METRICS_PORT', '3000'],
+    ['METRICS_PATH', '/metrics?query=value'],
+  ])('rejects invalid monitoring configuration for %s', (key, value) => {
+    expect(() =>
+      validateEnvironment({
+        ...required,
+        METRICS_ENABLED: 'true',
+        [key]: value,
+      }),
+    ).toThrow(key);
+  });
+
+  it('identifies a 128-character hex JWT secret without including its value', () => {
+    const hexSecret = 'ab'.repeat(64);
+    const input = {
+      ...required,
+      NODE_ENV: 'production',
+      CORS_ORIGINS: '',
+      SWAGGER_ENABLED: 'true',
+    };
+    const validate = () =>
+      validateEnvironment({ ...input, JWT_SECRET: hexSecret });
+
+    expect(validate).toThrow(EnvironmentValidationError);
+    expect(validate).toThrow(
+      /^JWT_SECRET must be 32 random bytes encoded as unpadded base64url$/,
+    );
+    expect(validateEnvironment(input)).toMatchObject({
+      CORS_ORIGINS: [],
+      SWAGGER_ENABLED: true,
     });
   });
 

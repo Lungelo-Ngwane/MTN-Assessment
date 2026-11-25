@@ -1,0 +1,29 @@
+services:
+  api:
+    environment:
+      METRICS_ENABLED: 'true'
+      METRICS_BIND: 0.0.0.0
+      METRICS_PORT: '9464'
+      METRICS_PATH: /metrics
+    networks:
+      - default
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:v3.11.0
+    ports:
+      - '127.0.0.1:${PROMETHEUS_PORT:-9090}:9090'
+    volumes:
+      - ./monitoring:/etc/prometheus/config:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/config/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+
+volumes:
+  prometheus-data:

@@ -290,6 +290,92 @@ enabled, so an internal production deployment should restrict them at
 the ingress and use TLS. See the README for the register, authorize,
 calculate and contract CRUD demonstration.
 
+## Monitoring and alerting
+
+The Prometheus registry is per API instance. The existing request completion
+callback records one counter increment and one histogram observation, including
+errors and client disconnects (synthetic status 499). The histogram measures
+server-side elapsed seconds and uses buckets from 5 ms to 5 s, including the
+500 ms alert threshold.
+
+| Metric                              | What it measures                                                        |
+| ----------------------------------- | ----------------------------------------------------------------------- |
+| `http_requests_total`               | Completed or aborted requests by method, route template and status code |
+| `http_request_duration_seconds`     | Duration histogram with the same bounded labels                         |
+| Default process and Node.js metrics | CPU, memory, event-loop lag, garbage collection and runtime version     |
+
+Requests that never reach a handler use `unmatched`. Swagger routes use
+`documentation`, and methods outside the standard set use `OTHER`. Paths
+come from registered Express templates. IDs, query strings, raw URLs and
+request correlation IDs are excluded from metric labels. Scrapes are handled
+on a separate listener and never enter the API counters or HTTP logging.
+
+Metrics are opt-in and bind to loopback by default. The monitoring overlay
+joins Prometheus and the API on a dedicated bridge, leaves port 9464
+unpublished, and binds the Prometheus UI to host loopback. Other containers
+that can reach the API on its application network can also reach the listener
+when it binds all interfaces, so keep both networks restricted to trusted
+services. For production, keep metrics off public ingress and use network
+policy or a private authenticated TLS proxy when crossing trust boundaries.
+
+Prometheus scrapes and evaluates every 15 seconds. The initial rules are
+per target.
+
+| Alert              | Trigger and first action                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Target unavailable | One minute of failed scrapes. Check service health, listener configuration and network connectivity. This detects scrape failures rather than PostgreSQL readiness. |
+| High 5xx rate      | Over 5% for five minutes using a rolling five-minute window. Correlate server errors by route with structured logs and database readiness.                          |
+| High p95 latency   | Over 500 ms for five minutes using a rolling five-minute histogram. Inspect slow routes, runtime metrics and database behavior.                                     |
+
+The HTTP rules cover matched versioned API routes and require at least 60
+estimated requests in the five-minute window. That filters low-volume
+noise while allowing the target-down rule to fire without traffic. Deep
+database outages may contribute readiness errors. Histogram quantiles and
+`increase()` are estimates. These thresholds are initial operating values
+and should be revisited against production traffic and service objectives.
+
+For production notifications, configure Prometheus `alerting.alertmanagers`
+with a private Alertmanager deployment. Route by severity and environment,
+configure authenticated receivers, and verify delivery with a synthetic
+alert before relying on paging. The Compose overlay evaluates alerts but
+has no notification receiver.
+
+### Performance and database review
+
+The benchmark runs sequential endpoint scenarios against an isolated Windows
+Docker Desktop stack from a Windows Node.js client. It uses one registered
+user and one login, then reuses the bearer token without changing rate
+limits. It times complete response reads under fixed concurrency. This
+includes local networking and database work but excludes registration,
+login, warm-up and fixture insertion.
+
+Listing scopes both queries by owner inside a repeatable-read transaction.
+The existing composite index covers owner filtering and the descending
+creation-time and ID ordering. Offset pagination still has to visit skipped
+rows, and the exact count scans qualifying rows or index entries on each
+page. The API caps page size at 100 and defaults to 20. Prisma reuses one
+node-postgres pool per API instance, with the driver default maximum of 10
+connections plus configured 2 s connection and 3 s query timeouts. Review
+total pool capacity against PostgreSQL's connection budget before scaling
+replicas. The benchmark does not measure pool saturation or high concurrency.
+
+One baseline run on Windows Docker Desktop used Node.js 24.21.0, PostgreSQL
+17.12, Prometheus 3.11.0, eight workers and 2,000 measured requests per
+endpoint after 100 warm-up requests. The fixture contained 22,000 contracts,
+2,000 of which belonged to the requesting user.
+
+| Endpoint                                         | Requests/s |      p50 |      p95 |      p99 | Errors |
+| ------------------------------------------------ | ---------: | -------: | -------: | -------: | -----: |
+| Repayment calculation                            |   1,010.83 |  7.35 ms | 13.88 ms | 18.67 ms |     0% |
+| Authenticated contract listing, first page of 20 |     534.08 | 14.42 ms | 21.18 ms | 26.58 ms |     0% |
+
+PostgreSQL used an ordered composite index scan for the first page
+(0.020 ms). At offset 1,980 it used a bitmap scan and sort (0.358 ms).
+The separate exact count used a bitmap scan (0.201 ms). These are executor
+times for one seeded dataset. The measured first-page performance did not
+justify an index, pool or pagination change. The dataset and closed-loop
+run do not establish production capacity or deep-page latency under load.
+
 ## Verification and trade-offs
 
 Unit tests exercise financial invariants, configuration and database error
