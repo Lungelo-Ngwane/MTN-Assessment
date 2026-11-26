@@ -19,23 +19,57 @@ The API uses NestJS, TypeScript, Prisma, PostgreSQL, decimal.js and Swagger.
 The web app uses React Router, TanStack Query, React Hook Form, Zod, Tailwind
 and shadcn/ui components. Docker Compose provides local deployment.
 
+## Approach and key decisions
+
+- **One modular NestJS API.** Authentication, repayment, and contracts have
+  separate responsibilities while sharing one deployment and database.
+- **Server-side decimal calculations.** The API uses decimal.js and sends
+  money as decimal strings to preserve cents. Saving recalculates the selected
+  plan on the server so stored figures follow the same rules as the quote.
+- **PostgreSQL for ownership and consistency.** Queries are scoped to the signed-in
+  owner, and transactions lock the contract during updates so concurrent
+  changes to different fields are preserved.
+- **Same-origin access with in-memory sign-in.** The web proxy lets the browser
+  use one origin, and the browser keeps JWTs in memory to avoid persisting them.
+  Reloading requires signing in again.
+
 ## Quick start
 
 Use Node.js **24.21.0**, npm **11.19.0**, Docker Desktop or Docker Engine with
-Compose v2, and Git Bash or a comparable shell. Run from the source root.
+Compose v2, and Git Bash or a comparable shell.
+
+### 1. Open the source and install dependencies
+
+Clone the submitted branch or extract the source ZIP. Start Docker, then open
+Git Bash in the folder containing this README and `compose.yaml`.
 
 ```bash
 npm ci
+```
+
+### 2. Set up the local environment
+
+On a fresh setup, copy the example and generate the JWT signing key. If you
+already have a working `.env`, skip this step.
+
+```bash
 cp .env.example .env
 node -e "const fs=require('node:fs');const p='.env';const s=fs.readFileSync(p,'utf8');if(/^JWT_SECRET=\r?$/m.test(s)===false)throw Error('Expected an empty JWT_SECRET');fs.writeFileSync(p,s.replace(/^JWT_SECRET=(\r?)$/m,(_,eol)=>'JWT_SECRET='+require('node:crypto').randomBytes(32).toString('base64url')+eol));"
+```
+
+PowerShell users can use `Copy-Item .env.example .env` and `npm.cmd`. The Node
+command writes the key directly to the local file.
+
+### 3. Start the full stack
+
+```bash
 docker compose -f compose.yaml -f compose.web.yaml -f compose.monitoring.yaml up --build -d --wait
 ```
 
-Copy the example only for a new setup. PowerShell users can use
-`Copy-Item .env.example .env` and `npm.cmd`. The JWT command generates
-43 characters of unpadded base64url from 32 random bytes. Clear only the
-existing JWT setting before rotating it. Rotation invalidates previously
-issued tokens.
+Compose initializes PostgreSQL, applies migrations, and starts the API,
+frontend, and Prometheus. The migration job should exit with code 0.
+
+### 4. Open the app
 
 | Service                  | Local URL                                                                         |
 | ------------------------ | --------------------------------------------------------------------------------- |
