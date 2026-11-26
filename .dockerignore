@@ -1,6 +1,7 @@
 .git
 .env*
 .npm-cache
+.submission-check
 **/node_modules
 **/dist
 **/coverage

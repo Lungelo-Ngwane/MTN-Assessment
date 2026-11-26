@@ -4,6 +4,9 @@ dist/
 coverage/
 test-results/
 playwright-report/
+/.submission-check/
+*.dump
+*.sql.gz
 apps/api/src/generated/
 *.tsbuildinfo
 *.log
